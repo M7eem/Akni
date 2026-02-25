@@ -1,0 +1,5 @@
+{
+  "name": "Anki Flashcard Generator",
+  "description": "Generate high-quality Anki flashcards from PPTX and PDF files using AI.",
+  "requestFramePermissions": []
+}
