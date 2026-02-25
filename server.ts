@@ -56,17 +56,21 @@ app.post('/api/generate', upload.array('files'), async (req, res) => {
 
     await createAnkiPackage(cards, outputPath, deckName, extractionResult.images);
 
-    // 4. Send file
-    res.download(outputPath, outputFilename, (err) => {
-      if (err) {
-        console.error('Error sending file:', err);
-      }
-      
-      // Cleanup
-      files.forEach(file => fs.unlinkSync(file.path));
-      // fs.unlinkSync(outputPath); // Keep for debugging or delete? Let's delete after download completes or fails
-      // Ideally we should delete it, but for now let's keep it simple.
-      // In a real app, we'd have a cleanup job.
+    // Verify file exists and has content
+    const fileSize = fs.statSync(outputPath).size;
+    console.log(`Generated .apkg file: ${outputFilename} (${fileSize} bytes)`);
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${outputFilename}"`);
+    res.setHeader('Content-Length', fileSize);
+
+    const fileStream = fs.createReadStream(outputPath);
+    fileStream.pipe(res);
+
+    fileStream.on('close', () => {
+      // Cleanup after stream finishes
+      files.forEach(file => { try { fs.unlinkSync(file.path); } catch {} });
+      try { fs.unlinkSync(outputPath); } catch {}
     });
 
   } catch (error) {

@@ -1,8 +1,6 @@
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import fs from 'fs';
 
 interface ExtractionResult {
@@ -122,18 +120,14 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
 }
 
 async function extractPdf(buffer: Buffer): Promise<{ text: string }> {
-  // Handle potential ESM/CommonJS interop issues
-  const parse = typeof pdfParse === 'function' ? pdfParse : (pdfParse as any).default;
-  
-  if (typeof parse !== 'function') {
-      console.error('pdf-parse export:', pdfParse);
-      throw new Error('pdf-parse library not loaded correctly');
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+  const pdf = await loadingTask.promise;
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map((item: any) => item.str).join(' ');
+    fullText += `\n[PAGE ${i}]\n${pageText}`;
   }
-
-  const data = await parse(buffer);
-  // pdf-parse gives full text. It doesn't easily give per-page text with page numbers unless we use the paginator.
-  // data.text is all text. data.numpages is count.
-  // We can try to split by form feed if present, but pdf-parse output is just a string.
-  // For better structure, we might need a more advanced parser, but this is a good start.
-  return { text: data.text };
+  return { text: fullText };
 }
