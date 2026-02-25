@@ -3,7 +3,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export async function generateFlashcards(text: string, images: Record<string, Buffer>, deckName: string) {
-  const model = 'gemini-2.5-flash-latest'; // Or gemini-3.1-pro-preview for better reasoning
+  const model = 'gemini-2.5-pro-preview-05-06'; // Or gemini-3.1-pro-preview for better reasoning
   
   const systemPrompt = `
 You are a medical flashcard generator. Your job is to create high-quality Anki flashcards from the lecture content provided.
