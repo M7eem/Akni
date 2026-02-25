@@ -122,7 +122,15 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
 }
 
 async function extractPdf(buffer: Buffer): Promise<{ text: string }> {
-  const data = await pdfParse(buffer);
+  // Handle potential ESM/CommonJS interop issues
+  const parse = typeof pdfParse === 'function' ? pdfParse : (pdfParse as any).default;
+  
+  if (typeof parse !== 'function') {
+      console.error('pdf-parse export:', pdfParse);
+      throw new Error('pdf-parse library not loaded correctly');
+  }
+
+  const data = await parse(buffer);
   // pdf-parse gives full text. It doesn't easily give per-page text with page numbers unless we use the paginator.
   // data.text is all text. data.numpages is count.
   // We can try to split by form feed if present, but pdf-parse output is just a string.
