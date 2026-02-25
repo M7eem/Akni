@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
 import JSZip from 'jszip';
 import fs from 'fs';
 
@@ -8,16 +8,16 @@ interface Card {
   image?: string;
 }
 
-export async function createAnkiPackage(cards: Card[], outputPath: string, deckName: string, images: Record<string, Buffer>) {
-  const dbPath = outputPath.replace('.apkg', '.anki2');
-  if (fs.existsSync(dbPath)) {
-    fs.unlinkSync(dbPath);
-  }
+export async function createAnkiPackage(
+  cards: Card[],
+  outputPath: string,
+  deckName: string,
+  images: Record<string, Buffer>
+) {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database();
 
-  const db = new Database(dbPath);
-
-  // Create tables
-  db.exec(`
+  db.run(`
     CREATE TABLE col (
         id integer PRIMARY KEY, crt integer NOT NULL, mod integer NOT NULL,
         scm integer NOT NULL, ver integer NOT NULL, dty integer NOT NULL,
@@ -49,7 +49,7 @@ export async function createAnkiPackage(cards: Card[], outputPath: string, deckN
     );
   `);
 
-  const now = Math.floor(Date.now() / 1000); // Seconds
+  const now = Math.floor(Date.now() / 1000);
   const deckId = Math.floor(Math.random() * 1000000000) + 1000000000;
   const modelId = Math.floor(Math.random() * 1000000000) + 1000000000;
 
@@ -85,7 +85,7 @@ hr#answer {
         { name: "Front", ord: 0, sticky: false, rtl: false, font: "Arial", size: 20 },
         { name: "Back", ord: 1, sticky: false, rtl: false, font: "Arial", size: 20 }
       ],
-      css: css, latexPre: "", latexPost: "", tags: [], vers: []
+      css, latexPre: "", latexPost: "", tags: [], vers: []
     }
   };
 
@@ -107,14 +107,8 @@ hr#answer {
     "1": {
       id: 1, name: "Default", replayq: true,
       lapse: { delays: [10], mult: 0, minInt: 1, leechFails: 8, leechAction: 0 },
-      rev: {
-        perDay: 200, ease4: 1.3, fuzz: 0.05, minSpace: 1,
-        ivlFct: 1, maxIvl: 36500, bury: true, hardFactor: 1.2
-      },
-      new: {
-        perDay: 20, delays: [1, 10], separate: true, ints: [1, 4, 7],
-        initialFactor: 2500, bury: true, order: 1
-      },
+      rev: { perDay: 200, ease4: 1.3, fuzz: 0.05, minSpace: 1, ivlFct: 1, maxIvl: 36500, bury: true, hardFactor: 1.2 },
+      new: { perDay: 20, delays: [1, 10], separate: true, ints: [1, 4, 7], initialFactor: 2500, bury: true, order: 1 },
       maxTaken: 60, timer: 0, autoplay: true, mod: 0, usn: 0, dyn: false
     }
   };
@@ -126,59 +120,51 @@ hr#answer {
     newSpread: 0, dueCounts: true, curModel: modelId.toString(), collapseTime: 1200
   };
 
-  const insertCol = db.prepare("INSERT INTO col VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
-  insertCol.run(
-    1, now, now, now * 1000, 11, 0, -1, 0,
-    JSON.stringify(conf), JSON.stringify(models), JSON.stringify(decks), JSON.stringify(dconf), "{}"
+  db.run(
+    "INSERT INTO col VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    [1, now, now, now * 1000, 11, 0, -1, 0,
+     JSON.stringify(conf), JSON.stringify(models), JSON.stringify(decks), JSON.stringify(dconf), "{}"]
   );
-
-  const insertNote = db.prepare("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)");
-  const insertCard = db.prepare("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
 
   cards.forEach((card, i) => {
     const noteId = now * 1000 + i;
-    const guid = Math.floor(Math.random() * 10000000000).toString(); // Simple random string
-    
+    const guid = Math.floor(Math.random() * 10000000000).toString();
+
     let front = card.front;
-    const back = card.back;
-    
     if (card.image) {
       front += `<br><br><img src="${card.image}">`;
     }
 
-    const flds = front + "\x1f" + back;
+    const flds = front + "\x1f" + card.back;
     const sfld = card.front;
-    const csum = 0; 
 
-    insertNote.run(
-      noteId, guid, modelId, now, -1, "", flds, sfld, csum, 0, ""
+    db.run(
+      "INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+      [noteId, guid, modelId, now, -1, "", flds, sfld, 0, 0, ""]
     );
 
-    insertCard.run(
-      noteId + 1, noteId, deckId, 0, now, -1, 0, 0, i, 0, 0, 0, 0, 0, 0, 0, 0, ""
+    db.run(
+      "INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      [noteId + 1, noteId, deckId, 0, now, -1, 0, 0, i, 0, 0, 0, 0, 0, 0, 0, 0, ""]
     );
   });
 
+  const dbBuffer = Buffer.from(db.export());
   db.close();
 
-  // Create ZIP
   const zip = new JSZip();
-  zip.file('collection.anki2', fs.readFileSync(dbPath));
+  zip.file('collection.anki2', dbBuffer);
 
   const mediaIndex: Record<string, string> = {};
   if (images) {
-    const imageNames = Object.keys(images);
-    imageNames.forEach((filename, idx) => {
+    Object.keys(images).forEach((filename, idx) => {
       mediaIndex[idx.toString()] = filename;
       zip.file(idx.toString(), images[filename]);
     });
   }
-  
+
   zip.file('media', JSON.stringify(mediaIndex));
 
   const content = await zip.generateAsync({ type: 'nodebuffer' });
   fs.writeFileSync(outputPath, content);
-  
-  // Clean up
-  fs.unlinkSync(dbPath);
 }
