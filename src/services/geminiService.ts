@@ -1,9 +1,17 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 export async function generateFlashcards(text: string, images: Record<string, Buffer>, deckName: string) {
-  const model = 'gemini-2.0-flash'; // Or gemini-3.1-pro-preview for better reasoning
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+  
+  if (!apiKey) {
+    console.error("Missing API Key. Available env vars:", Object.keys(process.env));
+    throw new Error("API Key not found. Please ensure GEMINI_API_KEY, GOOGLE_API_KEY, or API_KEY is set.");
+  }
+
+  // Initialize client inside the function to ensure we have the latest env vars
+  const ai = new GoogleGenAI({ apiKey });
+  
+  const model = 'gemini-2.5-flash-preview-04-17'; // Or gemini-3.1-pro-preview for better reasoning
   
   const systemPrompt = `
 You are a medical flashcard generator. Your job is to create high-quality Anki flashcards from the lecture content provided.
@@ -92,7 +100,7 @@ Each card object:
             properties: {
               front: { type: Type.STRING },
               back: { type: Type.STRING },
-              image: { type: Type.STRING, nullable: true }
+              image: { type: Type.STRING }
             },
             required: ['front', 'back']
           }
