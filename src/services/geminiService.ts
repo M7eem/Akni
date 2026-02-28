@@ -2,40 +2,13 @@ import { GoogleGenAI, Type } from '@google/genai';
 
 export async function generateFlashcards(text: string, images: Record<string, Buffer>, deckName: string) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY not set");
+  if (!apiKey) throw new Error("GEMINI_API_KEY not set in environment variables");
   const ai = new GoogleGenAI({ apiKey });
   return generateWithClient(ai, text, images, deckName);
 }
 
 async function generateWithClient(ai: GoogleGenAI, text: string, images: Record<string, Buffer>, deckName: string) {
-  // Use the stable 2.0 Flash model
-  const model = 'gemini-3.1-pro-preview';
-```
-
----
-
-## Step 4 — Push to Railway
-
-Make sure your project has these files:
-```
-package.json        ← already exists
-Dockerfile          ← new file you just added
-src/
-  services/
-    ankiService.ts      ← replaced with Python version
-    geminiService.ts    ← fixed key + model name
-```
-
-Push to GitHub → Railway auto-deploys.
-
----
-
-## Step 5 — Verify it works
-
-Check Railway logs for:
-```
-Python output: DB created: XX cards
-APKG written: XXXXX bytes 
+  const model = 'gemini-2.0-flash-exp';
 
   const systemPrompt = `
 You are a medical flashcard generator. Your job is to create high-quality Anki flashcards from the lecture content provided.
@@ -89,7 +62,6 @@ Each card object:
 
   const parts: any[] = [];
 
-  // Add images (limit to 15)
   let imageCount = 0;
   for (const name of Object.keys(images)) {
     if (imageCount >= 15) break;
