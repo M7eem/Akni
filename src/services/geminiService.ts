@@ -8,7 +8,7 @@ export async function generateFlashcards(text: string, images: Record<string, Bu
 }
 
 async function generateWithClient(ai: GoogleGenAI, text: string, images: Record<string, Buffer>, deckName: string) {
-  const model = 'gemini-2.0-flash-exp';
+  const model = 'gemini-3.1-pro-preview';
 
   const systemPrompt = `
 You are a medical flashcard generator. Your job is to create high-quality Anki flashcards from the lecture content provided.
