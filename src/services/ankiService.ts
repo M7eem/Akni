@@ -22,25 +22,24 @@ export async function createAnkiPackage(
   const dataPath = path.join(tmpDir, `anki_data_${ts}.json`);
   const scriptPath = path.join(tmpDir, `anki_script_${ts}.py`);
 
-  // Write card data to a temp JSON file
-  const cardsWithImages = cards.map(card => ({
+  // Write cards to temp JSON file
+  const cardsData = cards.map(card => ({
     front: card.front,
     back: card.back,
     image: (card.image && images && images[card.image]) ? card.image : null
   }));
 
   fs.writeFileSync(dataPath, JSON.stringify({
-    cards: cardsWithImages,
+    cards: cardsData,
     deckName,
     dbPath
   }));
 
-  // Write the Python script that builds the SQLite database
-  // This is the exact working code from our Python implementation
+  // Python script that builds the SQLite database
   const pythonScript = `
 import sqlite3, json, time, os, random
 
-with open(${JSON.stringify(dataPath)}) as f:
+with open("""${dataPath}""") as f:
     data = json.load(f)
 
 cards = data['cards']
@@ -87,23 +86,7 @@ now = int(time.time())
 deck_id = random.randint(1000000000, 9999999999)
 model_id = random.randint(1000000000, 9999999999)
 
-css = """
-.card {
-  font-family: Arial, sans-serif;
-  font-size: 20px;
-  text-align: center;
-  color: #e8e8e8;
-  background-color: #2b2b2b;
-  padding: 20px 60px;
-  line-height: 1.8;
-}
-b { color: #7dd8f8; font-weight: bold; }
-hr#answer {
-  border: none;
-  border-top: 1px solid #555;
-  margin: 16px 0;
-}
-"""
+css = """.card{font-family:Arial,sans-serif;font-size:20px;text-align:center;color:#e8e8e8;background-color:#2b2b2b;padding:20px 60px;line-height:1.8}b{color:#7dd8f8;font-weight:bold}hr#answer{border:none;border-top:1px solid #555;margin:16px 0}"""
 
 models = json.dumps({str(model_id): {
     "id": model_id, "name": "Basic", "type": 0, "mod": now, "usn": -1,
@@ -173,7 +156,6 @@ print(f"DB created: {len(cards)} cards")
 
   fs.writeFileSync(scriptPath, pythonScript);
 
-  // Run the Python script
   try {
     const result = execSync(`python3 ${scriptPath}`, { timeout: 60000 });
     console.log('Python output:', result.toString());
@@ -189,7 +171,7 @@ print(f"DB created: {len(cards)} cards")
   const dbBuffer = fs.readFileSync(dbPath);
   console.log(`Database size: ${dbBuffer.length} bytes`);
 
-  // Build the ZIP (.apkg = renamed ZIP)
+  // Build ZIP (.apkg = renamed ZIP)
   const zip = new JSZip();
   zip.file('collection.anki2', dbBuffer);
 
@@ -204,9 +186,10 @@ print(f"DB created: {len(cards)} cards")
 
   const content = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   fs.writeFileSync(outputPath, content);
-
   console.log(`APKG written: ${content.length} bytes`);
 
   // Cleanup temp files
-  [dbPath, dataPath, scriptPath].forEach(f => { try { fs.unlinkSync(f); } catch {} });
+  [dbPath, dataPath, scriptPath].forEach(f => {
+    try { fs.unlinkSync(f); } catch {}
+  });
 }
