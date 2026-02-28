@@ -8,7 +8,8 @@ import { fileURLToPath } from 'url';
 import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
-
+import dotenv from 'dotenv';
+dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -19,6 +20,14 @@ const PORT = 3000;
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
+}
+
+// Check for .env file existence for debugging
+const envPath = path.join(__dirname, '.env');
+if (fs.existsSync(envPath)) {
+  console.log('.env file found at:', envPath);
+} else {
+  console.warn('No .env file found at:', envPath);
 }
 
 const upload = multer({ dest: uploadDir });
@@ -76,7 +85,14 @@ app.post('/api/generate', upload.array('files'), async (req, res) => {
 
   } catch (error) {
     console.error('Error generating flashcards:', error);
-    res.status(500).json({ error: 'Failed to generate flashcards', details: (error as Error).message });
+    if (error instanceof Error) {
+        console.error('Stack:', error.stack);
+    }
+    res.status(500).json({ 
+        error: 'Failed to generate flashcards', 
+        details: (error as Error).message,
+        stack: process.env.NODE_ENV !== 'production' ? (error as Error).stack : undefined
+    });
   }
 });
 
@@ -94,4 +110,20 @@ if (process.env.NODE_ENV !== 'production') {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://localhost:${PORT}`);
+});
+
+
+
+app.get('/api/models', async (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'API Key not configured' });
+  }
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`);
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch models', details: (error as Error).message });
+  }
 });

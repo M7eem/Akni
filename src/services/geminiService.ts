@@ -1,18 +1,18 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
 export async function generateFlashcards(text: string, images: Record<string, Buffer>, deckName: string) {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
-  
-  if (!apiKey) {
-    console.error("Missing API Key. Available env vars:", Object.keys(process.env));
-    throw new Error("API Key not found. Please ensure GEMINI_API_KEY, GOOGLE_API_KEY, or API_KEY is set.");
-  }
+  // Hardcoded API key for debugging purposes
+  const apiKey = "AIzaSyBZswq7HWc1o1flmdEr5gsgDwJSR09nBE4";
 
-  // Initialize client inside the function to ensure we have the latest env vars
-  const ai = new GoogleGenAI({ apiKey });
-  
-  const model = 'gemini-2.5-flash-preview-04-17'; // Or gemini-3.1-pro-preview for better reasoning
-  
+  console.log("Using hardcoded API key starting with:", apiKey.substring(0, 8));
+  const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+  return generateWithClient(ai, text, images, deckName);
+}
+
+async function generateWithClient(ai: GoogleGenAI, text: string, images: Record<string, Buffer>, deckName: string) {
+  // Use the stable 2.0 Flash model
+  const model = 'gemini-3.1-pro-preview'; 
+
   const systemPrompt = `
 You are a medical flashcard generator. Your job is to create high-quality Anki flashcards from the lecture content provided.
 
@@ -29,17 +29,17 @@ QUESTION TYPES — generate a mix of these:
 - Mechanism questions: "Trace the X pathway step by step"
 - Clinical scenario: "A patient presents with X — what is the lesion?"
 - Comparison: "What distinguishes disease A from disease B?"
-- Conceptual trap: "X uses GABA — so how does it facilitate movement?"
+- Conceptual: "X uses GABA — so how does it facilitate movement?"
 - Sequence: "What is the order of symptoms in disease X?"
 - Single fact: "What neurotransmitter does structure X use?"
 
 PRIORITIZATION RULES:
 - If the lecturer says "this is important", "most frequently asked", "remember this", or repeats something — generate 3+ cards on it
 - Anatomy shown on diagrams or CT scans = generate dedicated identification cards
-- Any named clinical sign (e.g. pill-rolling tremor, mask-like face) = dedicated card
-- Any disease comparison made by the lecturer = dedicated comparison card
+- Any named clinical sign = dedicated card
+- Any disease comparison = dedicated comparison card
 - Neurotransmitters and receptors mentioned by name = dedicated card
-- Symptom timing/sequence = dedicated card (this is a common MCQ trap)
+- Symptom timing/sequence = dedicated card
 
 CARD DISTRIBUTION:
 - 30% anatomy and identification
@@ -47,37 +47,35 @@ CARD DISTRIBUTION:
 - 25% clinical (signs, symptoms, disease comparisons)
 - 15% pharmacology and neurotransmitters
 
-TARGET: 40–60 cards per lecture. Quality over quantity.
+TARGET: 40-60 cards per lecture. Quality over quantity.
 
 IMAGE RULES:
-- If an image from the lecture is relevant to a card (e.g. CT scan, pathway diagram, anatomical structure), include its filename in the card's image field
-- Only attach images that genuinely help understanding — not decorative images
-- The image filename MUST match exactly one of the filenames provided in the context.
+- If an image from the lecture is relevant to a card, include its exact filename in the image field
+- Only attach images that genuinely help understanding
 
 OUTPUT FORMAT:
-Return a JSON array only.
+Return a JSON array only. No preamble, no markdown fences.
 Each card object:
 {
   "front": "question text with <b>bold</b> and <br> line breaks",
   "back": "answer text with <b>bold</b> and <br> line breaks",
-  "image": "slide_3_img_1.png"  // optional — omit if no image
+  "image": "filename.png"
 }
 `;
 
   const parts: any[] = [];
-  
-  // Add images (limit to 15 to avoid payload issues)
+
+  // Add images (limit to 15)
   let imageCount = 0;
-  const imageNames = Object.keys(images);
-  for (const name of imageNames) {
+  for (const name of Object.keys(images)) {
     if (imageCount >= 15) break;
     parts.push({
       inlineData: {
-        mimeType: 'image/png', // Assuming PNG for now, but could be JPEG.
+        mimeType: 'image/png',
         data: images[name].toString('base64')
       }
     });
-    parts.push({ text: `[Image: ${name}]` });
+    parts.push({ text: `[Image filename: ${name}]` });
     imageCount++;
   }
 
@@ -85,11 +83,8 @@ Each card object:
 
   try {
     const response = await ai.models.generateContent({
-      model: model,
-      contents: {
-        role: 'user',
-        parts: parts
-      },
+      model,
+      contents: { role: 'user', parts },
       config: {
         systemInstruction: systemPrompt,
         responseMimeType: 'application/json',
@@ -109,10 +104,11 @@ Each card object:
     });
 
     const jsonText = response.text;
-    if (!jsonText) {
-        throw new Error("Empty response from AI");
-    }
-    return JSON.parse(jsonText);
+    if (!jsonText) throw new Error("Empty response from AI");
+
+    const clean = jsonText.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+
   } catch (error) {
     console.error("AI Generation Error:", error);
     throw error;

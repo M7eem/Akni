@@ -1,9 +1,8 @@
 import JSZip from 'jszip';
 import fs from 'fs';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const initSqlJs = require('sql.js');
+import os from 'os';
+import path from 'path';
+import { execSync } from 'child_process';
 
 interface Card {
   front: string;
@@ -17,168 +16,197 @@ export async function createAnkiPackage(
   deckName: string,
   images: Record<string, Buffer>
 ) {
-  console.log('Initializing SQL.js...');
-  const SQL = await initSqlJs();
-  const db = new SQL.Database();
-  console.log('Database created.');
+  const tmpDir = os.tmpdir();
+  const ts = Date.now();
+  const dbPath = path.join(tmpDir, `anki_${ts}.anki2`);
+  const dataPath = path.join(tmpDir, `anki_data_${ts}.json`);
+  const scriptPath = path.join(tmpDir, `anki_script_${ts}.py`);
 
-  try {
-    db.run(`
-      CREATE TABLE col (
-          id integer PRIMARY KEY, crt integer NOT NULL, mod integer NOT NULL,
-          scm integer NOT NULL, ver integer NOT NULL, dty integer NOT NULL,
-          usn integer NOT NULL, ls integer NOT NULL, conf text NOT NULL,
-          models text NOT NULL, decks text NOT NULL, dconf text NOT NULL,
-          tags text NOT NULL
-      );
-      CREATE TABLE notes (
-          id integer PRIMARY KEY, guid text NOT NULL, mid integer NOT NULL,
-          mod integer NOT NULL, usn integer NOT NULL, tags text NOT NULL,
-          flds text NOT NULL, sfld text NOT NULL, csum integer NOT NULL,
-          flags integer NOT NULL, data text NOT NULL
-      );
-      CREATE TABLE cards (
-          id integer PRIMARY KEY, nid integer NOT NULL, did integer NOT NULL,
-          ord integer NOT NULL, mod integer NOT NULL, usn integer NOT NULL,
-          type integer NOT NULL, queue integer NOT NULL, due integer NOT NULL,
-          ivl integer NOT NULL, factor integer NOT NULL, reps integer NOT NULL,
-          lapses integer NOT NULL, left integer NOT NULL, odue integer NOT NULL,
-          odid integer NOT NULL, flags integer NOT NULL, data text NOT NULL
-      );
-      CREATE TABLE revlog (
-          id integer PRIMARY KEY, cid integer NOT NULL, usn integer NOT NULL,
-          ease integer NOT NULL, ivl integer NOT NULL, lastIvl integer NOT NULL,
-          factor integer NOT NULL, time integer NOT NULL, type integer NOT NULL
-      );
-      CREATE TABLE graves (
-          usn integer NOT NULL, oid integer NOT NULL, type integer NOT NULL
-      );
-    `);
+  // Write card data to a temp JSON file
+  const cardsWithImages = cards.map(card => ({
+    front: card.front,
+    back: card.back,
+    image: (card.image && images && images[card.image]) ? card.image : null
+  }));
 
-    const now = Math.floor(Date.now() / 1000);
-    const deckId = Math.floor(Math.random() * 1000000000) + 1000000000;
-    const modelId = Math.floor(Math.random() * 1000000000) + 1000000000;
+  fs.writeFileSync(dataPath, JSON.stringify({
+    cards: cardsWithImages,
+    deckName,
+    dbPath
+  }));
 
-    const css = `
-  .card {
-    font-family: Arial, sans-serif;
-    font-size: 20px;
-    text-align: center;
-    color: #e8e8e8;
-    background-color: #2b2b2b;
-    padding: 20px 60px;
-    line-height: 1.8;
-  }
-  b { color: #7dd8f8; font-weight: bold; }
-  hr#answer {
-    border: none;
-    border-top: 1px solid #555;
-    margin: 16px 0;
-  }
-  `;
+  // Write the Python script that builds the SQLite database
+  // This is the exact working code from our Python implementation
+  const pythonScript = `
+import sqlite3, json, time, os, random
 
-    const models = {
-      [modelId.toString()]: {
-        id: modelId, name: "Basic", type: 0, mod: now, usn: -1,
-        sortf: 0, did: deckId,
-        tmpls: [{
-          name: "Card 1", ord: 0,
-          qfmt: "{{Front}}",
-          afmt: "{{FrontSide}}<hr id=answer>{{Back}}",
-          bqfmt: "", bafmt: "", did: null, bfont: "", bsize: 0
-        }],
-        flds: [
-          { name: "Front", ord: 0, sticky: false, rtl: false, font: "Arial", size: 20 },
-          { name: "Back", ord: 1, sticky: false, rtl: false, font: "Arial", size: 20 }
-        ],
-        css, latexPre: "", latexPost: "", tags: [], vers: []
-      }
-    };
+with open(${JSON.stringify(dataPath)}) as f:
+    data = json.load(f)
 
-    const decks = {
-      "1": {
-        id: 1, name: "Default", conf: 1, desc: "", dyn: 0,
-        collapsed: false, mod: now, usn: -1,
-        lrnToday: [0, 0], revToday: [0, 0], newToday: [0, 0], timeToday: [0, 0]
-      },
-      [deckId.toString()]: {
-        id: deckId, name: deckName, desc: "", mod: now, usn: -1,
-        lrnToday: [0, 0], revToday: [0, 0], newToday: [0, 0], timeToday: [0, 0],
-        collapsed: false, browserCollapsed: false,
-        extendNew: 10, extendRev: 50, conf: 1, dyn: 0
-      }
-    };
+cards = data['cards']
+deck_name = data['deckName']
+db_path = data['dbPath']
 
-    const dconf = {
-      "1": {
-        id: 1, name: "Default", replayq: true,
-        lapse: { delays: [10], mult: 0, minInt: 1, leechFails: 8, leechAction: 0 },
-        rev: { perDay: 200, ease4: 1.3, fuzz: 0.05, minSpace: 1, ivlFct: 1, maxIvl: 36500, bury: true, hardFactor: 1.2 },
-        new: { perDay: 20, delays: [1, 10], separate: true, ints: [1, 4, 7], initialFactor: 2500, bury: true, order: 1 },
-        maxTaken: 60, timer: 0, autoplay: true, mod: 0, usn: 0, dyn: false
-      }
-    };
+if os.path.exists(db_path):
+    os.remove(db_path)
 
-    const conf = {
-      nextPos: 1, estTimes: true, activeDecks: [deckId],
-      sortType: "noteFld", timeLim: 0, sortBackwards: false,
-      addToCur: true, curDeck: deckId, newBury: true,
-      newSpread: 0, dueCounts: true, curModel: modelId.toString(), collapseTime: 1200
-    };
+conn = sqlite3.connect(db_path)
+c = conn.cursor()
 
-    db.run(
-      "INSERT INTO col VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-      [1, now, now, now * 1000, 11, 0, -1, 0,
-      JSON.stringify(conf), JSON.stringify(models), JSON.stringify(decks), JSON.stringify(dconf), "{}"]
-    );
+c.executescript("""
+CREATE TABLE col (
+    id integer PRIMARY KEY, crt integer NOT NULL, mod integer NOT NULL,
+    scm integer NOT NULL, ver integer NOT NULL, dty integer NOT NULL,
+    usn integer NOT NULL, ls integer NOT NULL, conf text NOT NULL,
+    models text NOT NULL, decks text NOT NULL, dconf text NOT NULL,
+    tags text NOT NULL
+);
+CREATE TABLE notes (
+    id integer PRIMARY KEY, guid text NOT NULL, mid integer NOT NULL,
+    mod integer NOT NULL, usn integer NOT NULL, tags text NOT NULL,
+    flds text NOT NULL, sfld text NOT NULL, csum integer NOT NULL,
+    flags integer NOT NULL, data text NOT NULL
+);
+CREATE TABLE cards (
+    id integer PRIMARY KEY, nid integer NOT NULL, did integer NOT NULL,
+    ord integer NOT NULL, mod integer NOT NULL, usn integer NOT NULL,
+    type integer NOT NULL, queue integer NOT NULL, due integer NOT NULL,
+    ivl integer NOT NULL, factor integer NOT NULL, reps integer NOT NULL,
+    lapses integer NOT NULL, left integer NOT NULL, odue integer NOT NULL,
+    odid integer NOT NULL, flags integer NOT NULL, data text NOT NULL
+);
+CREATE TABLE revlog (
+    id integer PRIMARY KEY, cid integer NOT NULL, usn integer NOT NULL,
+    ease integer NOT NULL, ivl integer NOT NULL, lastIvl integer NOT NULL,
+    factor integer NOT NULL, time integer NOT NULL, type integer NOT NULL
+);
+CREATE TABLE graves (usn integer NOT NULL, oid integer NOT NULL, type integer NOT NULL);
+""")
 
-    cards.forEach((card, i) => {
-      const noteId = now * 1000 + i;
-      const guid = Math.floor(Math.random() * 10000000000).toString();
+now = int(time.time())
+deck_id = random.randint(1000000000, 9999999999)
+model_id = random.randint(1000000000, 9999999999)
 
-      let front = card.front;
-      if (card.image) {
-        front += `<br><br><img src="${card.image}">`;
-      }
+css = """
+.card {
+  font-family: Arial, sans-serif;
+  font-size: 20px;
+  text-align: center;
+  color: #e8e8e8;
+  background-color: #2b2b2b;
+  padding: 20px 60px;
+  line-height: 1.8;
+}
+b { color: #7dd8f8; font-weight: bold; }
+hr#answer {
+  border: none;
+  border-top: 1px solid #555;
+  margin: 16px 0;
+}
+"""
 
-      const flds = front + "\x1f" + card.back;
-      const sfld = card.front;
+models = json.dumps({str(model_id): {
+    "id": model_id, "name": "Basic", "type": 0, "mod": now, "usn": -1,
+    "sortf": 0, "did": deck_id,
+    "tmpls": [{"name": "Card 1", "ord": 0,
+               "qfmt": "{{Front}}",
+               "afmt": "{{FrontSide}}<hr id=answer>{{Back}}",
+               "bqfmt": "", "bafmt": "", "did": None, "bfont": "", "bsize": 0}],
+    "flds": [
+        {"name": "Front", "ord": 0, "sticky": False, "rtl": False, "font": "Arial", "size": 20},
+        {"name": "Back",  "ord": 1, "sticky": False, "rtl": False, "font": "Arial", "size": 20}
+    ],
+    "css": css, "latexPre": "", "latexPost": "", "tags": [], "vers": []
+}})
 
-      db.run(
-        "INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        [noteId, guid, modelId, now, -1, "", flds, sfld, 0, 0, ""]
-      );
-
-      db.run(
-        "INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [noteId + 1, noteId, deckId, 0, now, -1, 0, 0, i, 0, 0, 0, 0, 0, 0, 0, 0, ""]
-      );
-    });
-
-    const data = db.export();
-    const dbBuffer = Buffer.from(data);
-    console.log(`Database exported. Size: ${dbBuffer.length} bytes`);
-    
-    db.close();
-
-    const zip = new JSZip();
-    zip.file('collection.anki2', dbBuffer);
-
-    const mediaIndex: Record<string, string> = {};
-    if (images) {
-      Object.keys(images).forEach((filename, idx) => {
-        mediaIndex[idx.toString()] = filename;
-        zip.file(idx.toString(), images[filename]);
-      });
+decks = json.dumps({
+    "1": {"id": 1, "name": "Default", "conf": 1, "desc": "", "dyn": 0,
+          "collapsed": False, "mod": now, "usn": -1,
+          "lrnToday": [0,0], "revToday": [0,0], "newToday": [0,0], "timeToday": [0,0]},
+    str(deck_id): {
+        "id": deck_id, "name": deck_name, "desc": "", "mod": now, "usn": -1,
+        "lrnToday": [0,0], "revToday": [0,0], "newToday": [0,0], "timeToday": [0,0],
+        "collapsed": False, "browserCollapsed": False,
+        "extendNew": 10, "extendRev": 50, "conf": 1, "dyn": 0
     }
+})
 
-    zip.file('media', JSON.stringify(mediaIndex));
+dconf = json.dumps({"1": {
+    "id": 1, "name": "Default", "replayq": True,
+    "lapse": {"delays": [10], "mult": 0, "minInt": 1, "leechFails": 8, "leechAction": 0},
+    "rev": {"perDay": 200, "ease4": 1.3, "fuzz": 0.05, "minSpace": 1,
+            "ivlFct": 1, "maxIvl": 36500, "bury": True, "hardFactor": 1.2},
+    "new": {"perDay": 20, "delays": [1, 10], "separate": True, "ints": [1, 4, 7],
+            "initialFactor": 2500, "bury": True, "order": 1},
+    "maxTaken": 60, "timer": 0, "autoplay": True, "mod": 0, "usn": 0, "dyn": False
+}})
 
-    const content = await zip.generateAsync({ type: 'nodebuffer' });
-    console.log(`Zip generated. Size: ${content.length} bytes`);
-    fs.writeFileSync(outputPath, content);
-  } catch (err) {
-    console.error('Error in createAnkiPackage:', err);
-    throw err;
+conf = json.dumps({
+    "nextPos": 1, "estTimes": True, "activeDecks": [deck_id],
+    "sortType": "noteFld", "timeLim": 0, "sortBackwards": False,
+    "addToCur": True, "curDeck": deck_id, "newBury": True,
+    "newSpread": 0, "dueCounts": True, "curModel": str(model_id), "collapseTime": 1200
+})
+
+c.execute("INSERT INTO col VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    (1, now, now, now*1000, 11, 0, -1, 0, conf, models, decks, dconf, "{}"))
+
+for i, card in enumerate(cards):
+    note_id = now * 1000 + i
+    guid = str(random.randint(10**9, 10**10))
+    front = card['front']
+    back = card['back']
+    if card.get('image'):
+        front += '<br><br><img src="' + card['image'] + '">'
+    flds = front + "\\x1f" + back
+    sfld = card['front']
+    csum = int.from_bytes(sfld[:9].encode('utf-8')[:4].ljust(4, b'\\x00'), 'big')
+    c.execute("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (note_id, guid, model_id, now, -1, "", flds, sfld, csum, 0, ""))
+    c.execute("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (note_id+1, note_id, deck_id, 0, now, -1, 0, 0, i, 0, 0, 0, 0, 0, 0, 0, 0, ""))
+
+conn.commit()
+conn.close()
+print(f"DB created: {len(cards)} cards")
+`;
+
+  fs.writeFileSync(scriptPath, pythonScript);
+
+  // Run the Python script
+  try {
+    const result = execSync(`python3 ${scriptPath}`, { timeout: 60000 });
+    console.log('Python output:', result.toString());
+  } catch (err: any) {
+    console.error('Python script failed:', err.stdout?.toString(), err.stderr?.toString());
+    throw new Error(`Failed to build SQLite database: ${err.stderr?.toString() || err.message}`);
   }
+
+  if (!fs.existsSync(dbPath)) {
+    throw new Error('Python script ran but database file was not created');
+  }
+
+  const dbBuffer = fs.readFileSync(dbPath);
+  console.log(`Database size: ${dbBuffer.length} bytes`);
+
+  // Build the ZIP (.apkg = renamed ZIP)
+  const zip = new JSZip();
+  zip.file('collection.anki2', dbBuffer);
+
+  const mediaIndex: Record<string, string> = {};
+  if (images) {
+    Object.keys(images).forEach((filename, idx) => {
+      mediaIndex[idx.toString()] = filename;
+      zip.file(idx.toString(), images[filename]);
+    });
+  }
+  zip.file('media', JSON.stringify(mediaIndex));
+
+  const content = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+  fs.writeFileSync(outputPath, content);
+
+  console.log(`APKG written: ${content.length} bytes`);
+
+  // Cleanup temp files
+  [dbPath, dataPath, scriptPath].forEach(f => { try { fs.unlinkSync(f); } catch {} });
 }
