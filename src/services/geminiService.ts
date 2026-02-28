@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 
 export async function generateFlashcards(text: string, images: Record<string, Buffer>, deckName: string) {
   // Hardcoded API key for debugging purposes
-  const apiKey = "AIzaSyBZswq7HWc1o1flmdEr5gsgDwJSR09nBE4";
+  const apiKey = process.env.GEMINI_API_KEY;
 
   console.log("Using hardcoded API key starting with:", apiKey.substring(0, 8));
   const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
