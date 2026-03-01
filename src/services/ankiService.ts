@@ -14,7 +14,8 @@ export async function createAnkiPackage(
   cards: Card[],
   outputPath: string,
   deckName: string,
-  images: Record<string, Buffer>
+  images: Record<string, Buffer>,
+  cardTypes: string[] = ['basic']
 ) {
   const tmpDir = os.tmpdir();
   const ts = Date.now();
@@ -24,6 +25,7 @@ export async function createAnkiPackage(
 
   // Write cards to temp JSON file
   const cardsData = cards.map(card => ({
+    type: (card as any).type || 'basic', // Ensure type exists
     front: card.front,
     back: card.back,
     image: (card.image && images && images[card.image]) ? card.image : null
@@ -32,7 +34,8 @@ export async function createAnkiPackage(
   fs.writeFileSync(dataPath, JSON.stringify({
     cards: cardsData,
     deckName,
-    dbPath
+    dbPath,
+    cardTypes
   }));
 
   // Python script that builds the SQLite database
@@ -45,6 +48,7 @@ with open("""${dataPath}""") as f:
 cards = data['cards']
 deck_name = data['deckName']
 db_path = data['dbPath']
+# card_types is available but we rely on individual card 'type' field
 
 if os.path.exists(db_path):
     os.remove(db_path)
@@ -84,12 +88,14 @@ CREATE TABLE graves (usn integer NOT NULL, oid integer NOT NULL, type integer NO
 
 now = int(time.time())
 deck_id = random.randint(1000000000, 9999999999)
-model_id = random.randint(1000000000, 9999999999)
+model_id_basic = random.randint(1000000000, 9999999999)
+model_id_cloze = random.randint(1000000000, 9999999999)
 
-css = """.card{font-family:Arial,sans-serif;font-size:20px;text-align:center;color:#e8e8e8;background-color:#2b2b2b;padding:20px 60px;line-height:1.8}b{color:#7dd8f8;font-weight:bold}hr#answer{border:none;border-top:1px solid #555;margin:16px 0}"""
+css = """.card{font-family:Arial,sans-serif;font-size:20px;text-align:center;color:#e8e8e8;background-color:#2b2b2b;padding:20px 60px;line-height:1.8}b{color:#7dd8f8;font-weight:bold}hr#answer{border:none;border-top:1px solid #555;margin:16px 0}.cloze{font-weight:bold;color:#7dd8f8}"""
 
-models = json.dumps({str(model_id): {
-    "id": model_id, "name": "Basic", "type": 0, "mod": now, "usn": -1,
+# Basic Model
+basic_model = {
+    "id": model_id_basic, "name": "Basic", "type": 0, "mod": now, "usn": -1,
     "sortf": 0, "did": deck_id,
     "tmpls": [{"name": "Card 1", "ord": 0,
                "qfmt": "{{Front}}",
@@ -100,7 +106,32 @@ models = json.dumps({str(model_id): {
         {"name": "Back",  "ord": 1, "sticky": False, "rtl": False, "font": "Arial", "size": 20}
     ],
     "css": css, "latexPre": "", "latexPost": "", "tags": [], "vers": []
-}})
+}
+
+# Cloze Model
+cloze_model = {
+    "id": model_id_cloze, "name": "Cloze", "type": 1, "mod": now, "usn": -1,
+    "sortf": 0, "did": deck_id,
+    "tmpls": [{"name": "Cloze", "ord": 0,
+               "qfmt": "{{cloze:Text}}",
+               "afmt": "{{cloze:Text}}<br><br>{{Back Extra}}",
+               "bqfmt": "", "bafmt": "", "did": None, "bfont": "", "bsize": 0}],
+    "flds": [
+        {"name": "Text", "ord": 0, "sticky": False, "rtl": False, "font": "Arial", "size": 20},
+        {"name": "Back Extra", "ord": 1, "sticky": False, "rtl": False, "font": "Arial", "size": 20}
+    ],
+    "css": css, "latexPre": "", "latexPost": "", "tags": [], "vers": []
+}
+
+models_dict = {
+    str(model_id_basic): basic_model,
+    str(model_id_cloze): cloze_model
+}
+
+models = json.dumps(models_dict)
+
+# Default to basic model for deck config
+target_model_id = model_id_basic
 
 decks = json.dumps({
     "1": {"id": 1, "name": "Default", "conf": 1, "desc": "", "dyn": 0,
@@ -128,26 +159,53 @@ conf = json.dumps({
     "nextPos": 1, "estTimes": True, "activeDecks": [deck_id],
     "sortType": "noteFld", "timeLim": 0, "sortBackwards": False,
     "addToCur": True, "curDeck": deck_id, "newBury": True,
-    "newSpread": 0, "dueCounts": True, "curModel": str(model_id), "collapseTime": 1200
+    "newSpread": 0, "dueCounts": True, "curModel": str(target_model_id), "collapseTime": 1200
 })
 
 c.execute("INSERT INTO col VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
     (1, now, now, now*1000, 11, 0, -1, 0, conf, models, decks, dconf, "{}"))
 
 for i, card in enumerate(cards):
-    note_id = now * 1000 + i
+    # Increment note_id by 1000 to ensure enough space for card IDs (up to 999 cards per note)
+    # This prevents collision between Card IDs of Note A and Card IDs of Note B
+    note_id = (now + i) * 1000
     guid = str(random.randint(10**9, 10**10))
+    
+    # Determine type for this specific card
+    ctype = card.get('type', 'basic')
+    
+    if ctype == 'cloze':
+        mid = model_id_cloze
+    else:
+        mid = model_id_basic
+
     front = card['front']
     back = card['back']
     if card.get('image'):
         front += '<br><br><img src="' + card['image'] + '">'
+    
     flds = front + "\\x1f" + back
     sfld = card['front']
     csum = int.from_bytes(sfld[:9].encode('utf-8')[:4].ljust(4, b'\\x00'), 'big')
+    
     c.execute("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (note_id, guid, model_id, now, -1, "", flds, sfld, csum, 0, ""))
-    c.execute("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (note_id+1, note_id, deck_id, 0, now, -1, 0, 0, i, 0, 0, 0, 0, 0, 0, 0, 0, ""))
+        (note_id, guid, mid, now, -1, "", flds, sfld, csum, 0, ""))
+    
+    # Create cards
+    num_cards = 1
+    if ctype == 'cloze':
+        import re
+        # Find all {{c(\d+)::
+        matches = re.findall(r'{{c(\d+)::', front)
+        if matches:
+            indices = [int(m) for m in matches]
+            num_cards = max(indices) if indices else 1
+    
+    for ord_idx in range(num_cards):
+        # Card ID = Note ID + 1 + ord
+        # Since Note IDs are 1000 apart, this is safe for up to 999 clozes per note
+        c.execute("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (note_id+1+ord_idx, note_id, deck_id, ord_idx, now, -1, 0, 0, i, 0, 0, 0, 0, 0, 0, 0, 0, ""))
 
 conn.commit()
 conn.close()

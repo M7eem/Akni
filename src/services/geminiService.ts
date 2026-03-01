@@ -1,63 +1,76 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
-export async function generateFlashcards(text: string, images: Record<string, Buffer>, deckName: string) {
+export async function generateFlashcards(text: string, images: Record<string, Buffer>, deckName: string, cardTypes: string[] = ['basic']) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not set in environment variables");
   const ai = new GoogleGenAI({ apiKey });
-  return generateWithClient(ai, text, images, deckName);
+  return generateWithClient(ai, text, images, deckName, cardTypes);
 }
 
-async function generateWithClient(ai: GoogleGenAI, text: string, images: Record<string, Buffer>, deckName: string) {
+async function generateWithClient(ai: GoogleGenAI, text: string, images: Record<string, Buffer>, deckName: string, cardTypes: string[]) {
   const model = 'gemini-3.1-pro-preview';
 
   const systemPrompt = `
 You are a medical flashcard generator. Your job is to create high-quality Anki flashcards from the lecture content provided.
 
-CARD QUALITY RULES:
-1. Every card tests ONE concept only (atomic cards)
-2. The front is a focused question — never a definition dump
-3. The back gives the answer + the reasoning behind it
-4. Bold all key terms using <b>tags</b>
-5. Use <br> for line breaks — never raw newlines
-6. Spell out all abbreviations on first use: write "Globus Pallidus internal (GPi)" not just "GPi"
-7. Never use emoji, never label cards as "TRAP" or add warning symbols
+You must generate a mix of the following card types based on the user's selection: ${cardTypes.join(', ')}.
 
-QUESTION TYPES — generate a mix of these:
-- Mechanism questions: "Trace the X pathway step by step"
-- Clinical scenario: "A patient presents with X — what is the lesion?"
-- Comparison: "What distinguishes disease A from disease B?"
-- Conceptual: "X uses GABA — so how does it facilitate movement?"
-- Sequence: "What is the order of symptoms in disease X?"
-- Single fact: "What neurotransmitter does structure X use?"
+CARD TYPES & FORMATS:
 
-PRIORITIZATION RULES:
-- If the lecturer says "this is important", "most frequently asked", "remember this", or repeats something — generate 3+ cards on it
-- Anatomy shown on diagrams or CT scans = generate dedicated identification cards
-- Any named clinical sign = dedicated card
-- Any disease comparison = dedicated comparison card
-- Neurotransmitters and receptors mentioned by name = dedicated card
-- Symptom timing/sequence = dedicated card
+${cardTypes.includes('basic') ? `
+1. BASIC CARDS (Standard Q&A)
+   - Front: A focused question.
+   - Back: The answer + reasoning.
+   - JSON Type: "basic"
+` : ''}
 
-CARD DISTRIBUTION:
-- 30% anatomy and identification
-- 30% mechanisms and pathways (step-by-step traces)
-- 25% clinical (signs, symptoms, disease comparisons)
-- 15% pharmacology and neurotransmitters
+${cardTypes.includes('cloze') ? `
+2. CLOZE DELETION CARDS (Fill-in-the-blank)
+   - Use Anki syntax: {{c1::hidden text}}.
+   - Can have multiple clozes (c1, c2) if distinct concepts.
+   - JSON Type: "cloze"
+   - Front: The full sentence with clozes.
+` : ''}
 
-TARGET: 40-60 cards per lecture. Quality over quantity.
+${cardTypes.includes('image_occlusion') ? `
+3. IMAGE FOCUS CARDS (Visual ID)
+   - Ask to identify structures in the provided images.
+   - JSON Type: "image_occlusion"
+   - Front: Question + Image.
+   - Back: Answer + Explanation.
+` : ''}
 
-IMAGE RULES:
-- If an image from the lecture is relevant to a card, include its exact filename in the image field
-- Only attach images that genuinely help understanding
+GENERAL QUALITY RULES:
+- Every card tests ONE concept only.
+- Bold key terms using <b>tags</b>.
+- Use <br> for line breaks.
+- Spell out abbreviations on first use.
 
 OUTPUT FORMAT:
-Return a JSON array only. No preamble, no markdown fences.
-Each card object:
-{
-  "front": "question text with <b>bold</b> and <br> line breaks",
-  "back": "answer text with <b>bold</b> and <br> line breaks",
-  "image": "filename.png"
-}
+Return a JSON array only.
+Each card object must have a "type" field matching one of the requested types.
+
+Example:
+[
+  {
+    "type": "basic",
+    "front": "What is the function of X?",
+    "back": "It does Y.",
+    "image": null
+  },
+  {
+    "type": "cloze",
+    "front": "The {{c1::mitochondria}} is the powerhouse of the cell.",
+    "back": "Extra info here",
+    "image": null
+  },
+  {
+    "type": "image_occlusion",
+    "front": "Identify the structure shown.",
+    "back": "This is the <b>Thalamus</b>.",
+    "image": "fig1.png"
+  }
+]
 `;
 
   const parts: any[] = [];
@@ -89,11 +102,12 @@ Each card object:
           items: {
             type: Type.OBJECT,
             properties: {
+              type: { type: Type.STRING },
               front: { type: Type.STRING },
               back: { type: Type.STRING },
               image: { type: Type.STRING }
             },
-            required: ['front', 'back']
+            required: ['type', 'front', 'back']
           }
         }
       }

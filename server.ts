@@ -37,6 +37,15 @@ app.post('/api/generate', upload.array('files'), async (req, res) => {
   try {
     const files = req.files as Express.Multer.File[];
     const deckName = req.body.deck_name;
+    let cardTypes: string[] = ['basic'];
+    
+    try {
+      if (req.body.card_types) {
+        cardTypes = JSON.parse(req.body.card_types);
+      }
+    } catch (e) {
+      console.warn('Failed to parse card_types, defaulting to basic', e);
+    }
 
     if (!files || files.length === 0) {
       return res.status(400).json({ error: 'No files uploaded' });
@@ -52,7 +61,7 @@ app.post('/api/generate', upload.array('files'), async (req, res) => {
     const extractionResult = await extractContent(files);
     
     // 2. Generate flashcards with AI
-    const cards = await generateFlashcards(extractionResult.text, extractionResult.images, deckName);
+    const cards = await generateFlashcards(extractionResult.text, extractionResult.images, deckName, cardTypes);
 
     // 3. Create .apkg file
     const outputDir = path.join(__dirname, 'output');
@@ -64,7 +73,7 @@ app.post('/api/generate', upload.array('files'), async (req, res) => {
     const outputFilename = `${deckName.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.apkg`;
     const outputPath = path.join(outputDir, outputFilename);
 
-    await createAnkiPackage(cards, outputPath, deckName, extractionResult.images);
+    await createAnkiPackage(cards, outputPath, deckName, extractionResult.images, cardTypes);
 
     // Verify file exists and has content
     const fileSize = fs.statSync(outputPath).size;

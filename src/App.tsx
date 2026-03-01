@@ -12,6 +12,7 @@ type Status = 'idle' | 'uploading' | 'processing' | 'generating' | 'building' | 
 export default function App() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [deckName, setDeckName] = useState('');
+  const [cardTypes, setCardTypes] = useState<string[]>(['basic']);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
@@ -75,6 +76,7 @@ export default function App() {
     const formData = new FormData();
     files.forEach(f => formData.append('files', f.file));
     formData.append('deck_name', deckName);
+    formData.append('card_types', JSON.stringify(cardTypes));
 
     try {
       // Simulate progress stages for better UX since backend is monolithic
@@ -284,6 +286,53 @@ export default function App() {
                   />
                 </div>
 
+                {/* Card Type Selection */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-neutral-700">
+                    Card Types (Select multiple)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {['basic', 'cloze', 'image_occlusion'].map((type) => {
+                      const isSelected = cardTypes.includes(type);
+                      return (
+                        <button
+                          key={type}
+                          onClick={() => {
+                            setCardTypes(prev => 
+                              isSelected 
+                                ? prev.filter(t => t !== type) 
+                                : [...prev, type]
+                            );
+                          }}
+                          className={`
+                            px-4 py-3 rounded-xl border text-left transition-all relative
+                            ${isSelected 
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200' 
+                              : 'border-neutral-200 hover:border-indigo-300 hover:bg-neutral-50'}
+                          `}
+                        >
+                          {isSelected && (
+                            <div className="absolute top-2 right-2 text-indigo-600">
+                              <CheckCircle size={16} />
+                            </div>
+                          )}
+                          <div className="font-semibold mb-1 capitalize">
+                            {type === 'image_occlusion' ? 'Image Focus' : type}
+                          </div>
+                          <div className="text-xs opacity-80">
+                            {type === 'basic' && 'Standard Q&A flashcards'}
+                            {type === 'cloze' && 'Fill-in-the-blank style'}
+                            {type === 'image_occlusion' && 'Visual identification cards'}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {cardTypes.length === 0 && (
+                    <p className="text-sm text-red-500 mt-1">Please select at least one card type.</p>
+                  )}
+                </div>
+
                 {/* Error Message */}
                 {status === 'error' && (
                   <motion.div 
@@ -302,11 +351,11 @@ export default function App() {
                 {/* Generate Button */}
                 <button
                   onClick={handleGenerate}
-                  disabled={files.length === 0 || !deckName.trim() || status !== 'idle' && status !== 'error'}
+                  disabled={files.length === 0 || !deckName.trim() || cardTypes.length === 0 || (status !== 'idle' && status !== 'error')}
                   className={`
                     w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-indigo-100
                     flex items-center justify-center gap-3
-                    ${files.length === 0 || !deckName.trim() || (status !== 'idle' && status !== 'error')
+                    ${files.length === 0 || !deckName.trim() || cardTypes.length === 0 || (status !== 'idle' && status !== 'error')
                       ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
                       : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0'}
                   `}
