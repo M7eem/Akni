@@ -13,6 +13,7 @@ export default function App() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [deckName, setDeckName] = useState('');
   const [cardTypes, setCardTypes] = useState<string[]>(['basic']);
+  const [includeOcclusion, setIncludeOcclusion] = useState(true);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
@@ -77,6 +78,7 @@ export default function App() {
     files.forEach(f => formData.append('files', f.file));
     formData.append('deck_name', deckName);
     formData.append('card_types', JSON.stringify(cardTypes));
+    formData.append('include_occlusion', includeOcclusion.toString());
 
     try {
       // Simulate progress stages for better UX since backend is monolithic
@@ -331,6 +333,28 @@ export default function App() {
                   {cardTypes.length === 0 && (
                     <p className="text-sm text-red-500 mt-1">Please select at least one card type.</p>
                   )}
+                </div>
+
+                {/* Occlusion Toggle */}
+                <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-neutral-200">
+                  <div>
+                    <h3 className="font-medium text-neutral-900">Include Image Occlusion Cards</h3>
+                    <p className="text-sm text-neutral-500">Automatically detect labels in anatomy diagrams and create occlusion cards.</p>
+                  </div>
+                  <button
+                    onClick={() => setIncludeOcclusion(!includeOcclusion)}
+                    className={`
+                      relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
+                      ${includeOcclusion ? 'bg-indigo-600' : 'bg-neutral-200'}
+                    `}
+                  >
+                    <span
+                      className={`
+                        inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                        ${includeOcclusion ? 'translate-x-6' : 'translate-x-1'}
+                      `}
+                    />
+                  </button>
                 </div>
 
                 {/* Error Message */}

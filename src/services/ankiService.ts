@@ -10,12 +10,15 @@ interface Card {
   image?: string;
 }
 
+import { OcclusionCard } from './occlusionService';
+
 export async function createAnkiPackage(
   cards: Card[],
   outputPath: string,
   deckName: string,
   images: Record<string, Buffer>,
-  cardTypes: string[] = ['basic']
+  cardTypes: string[] = ['basic'],
+  occlusionCards: OcclusionCard[] = []
 ) {
   const tmpDir = os.tmpdir();
   const ts = Date.now();
@@ -23,8 +26,25 @@ export async function createAnkiPackage(
   const dataPath = path.join(tmpDir, `anki_data_${ts}.json`);
   const scriptPath = path.join(tmpDir, `anki_script_${ts}.py`);
 
+  // Add occlusion cards to the main cards list
+  const allCards = [...cards];
+  
+  if (occlusionCards && occlusionCards.length > 0) {
+    occlusionCards.forEach(oc => {
+      allCards.push({
+        front: oc.front,
+        back: oc.back,
+        type: 'basic' // Occlusion cards are essentially basic cards with images
+      } as any);
+      
+      // Add images to the images record
+      images[oc.frontImageName] = oc.frontImageBuffer;
+      images[oc.backImageName] = oc.backImageBuffer;
+    });
+  }
+
   // Write cards to temp JSON file
-  const cardsData = cards.map(card => ({
+  const cardsData = allCards.map(card => ({
     type: (card as any).type || 'basic', // Ensure type exists
     front: card.front,
     back: card.back,

@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
+import { generateOcclusionCards } from './src/services/occlusionService';
 import dotenv from 'dotenv';
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -63,6 +64,21 @@ app.post('/api/generate', upload.array('files'), async (req, res) => {
     // 2. Generate flashcards with AI
     const cards = await generateFlashcards(extractionResult.text, extractionResult.images, deckName, cardTypes);
 
+    // 2.5 Generate occlusion cards if requested
+    const includeOcclusion = req.body.include_occlusion !== 'false';
+    let occlusionCards: any[] = [];
+    
+    if (includeOcclusion) {
+      console.log('Generating occlusion cards...');
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (apiKey) {
+        occlusionCards = await generateOcclusionCards(extractionResult.images, apiKey);
+        console.log(`Generated ${occlusionCards.length} occlusion cards`);
+      } else {
+        console.warn('Skipping occlusion generation: No API key found');
+      }
+    }
+
     // 3. Create .apkg file
     const outputDir = path.join(__dirname, 'output');
     if (!fs.existsSync(outputDir)) {
@@ -73,7 +89,7 @@ app.post('/api/generate', upload.array('files'), async (req, res) => {
     const outputFilename = `${deckName.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.apkg`;
     const outputPath = path.join(outputDir, outputFilename);
 
-    await createAnkiPackage(cards, outputPath, deckName, extractionResult.images, cardTypes);
+    await createAnkiPackage(cards, outputPath, deckName, extractionResult.images, cardTypes, occlusionCards);
 
     // Verify file exists and has content
     const fileSize = fs.statSync(outputPath).size;
