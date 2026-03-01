@@ -1,13 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Image as ImageIcon, CheckSquare, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import LabelEditorStep, { Label } from './components/LabelEditorStep';
 
 interface UploadedFile {
   file: File;
   id: string;
 }
 
-type Status = 'idle' | 'uploading' | 'extracting' | 'processing' | 'generating' | 'building' | 'complete' | 'error';
+type Status = 'idle' | 'uploading' | 'extracting' | 'processing' | 'generating' | 'building' | 'complete' | 'error' | 'detecting';
 
 export default function App() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -20,9 +21,10 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [sessionId, setSessionId] = useState<string>('');
-  const [extractedImages, setExtractedImages] = useState<{name: string, data: string}[]>([]);
-  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
-  const [step, setStep] = useState<'upload' | 'select' | 'complete'>('upload');
+  const [extractedImages, setExtractedImages] = useState<{name: string, data: string, mimeType: string}[]>([]);
+  const [selectedImageName, setSelectedImageName] = useState<string | null>(null);
+  const [step, setStep] = useState<'upload' | 'imagePicker' | 'labelEditor' | 'generating' | 'complete'>('upload');
+  const [detectedLabels, setDetectedLabels] = useState<Label[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -97,11 +99,11 @@ export default function App() {
       setExtractedImages(data.images || []);
       
       if (data.images && data.images.length > 0) {
-        setStep('select');
+        setStep('imagePicker');
         setStatus('idle');
       } else {
         // No images found, skip selection step
-        await handleGenerate(data.sessionId, []);
+        await handleGenerate(data.sessionId, null);
       }
     } catch (error) {
       console.error(error);
@@ -110,7 +112,40 @@ export default function App() {
     }
   };
 
-  const handleGenerate = async (currentSessionId: string = sessionId, imagesToOcclude: string[] = Array.from(selectedImages)) => {
+  const handleDetectLabels = async () => {
+    if (!selectedImageName) return;
+    const selectedImage = extractedImages.find(img => img.name === selectedImageName);
+    if (!selectedImage) return;
+
+    setStatus('detecting');
+    setErrorMessage('');
+
+    try {
+      const response = await fetch('/api/detect-labels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: selectedImage.data,
+          imageName: selectedImage.name
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to detect labels');
+      }
+
+      const data = await response.json();
+      setDetectedLabels(data.labels || []);
+      setStep('labelEditor');
+      setStatus('idle');
+    } catch (error) {
+      console.error(error);
+      setStatus('error');
+      setErrorMessage((error as Error).message);
+    }
+  };
+
+  const handleGenerate = async (currentSessionId: string = sessionId, occlusionData: { imageName: string, labels: Label[] } | null = null) => {
     setStatus('generating');
     setErrorMessage('');
     
@@ -118,7 +153,9 @@ export default function App() {
     formData.append('sessionId', currentSessionId);
     formData.append('deck_name', deckName);
     formData.append('card_types', JSON.stringify(cardTypes));
-    formData.append('selected_images', JSON.stringify(imagesToOcclude));
+    if (occlusionData) {
+      formData.append('occlusionData', JSON.stringify(occlusionData));
+    }
 
     try {
       const progressInterval = setInterval(() => {
@@ -162,23 +199,7 @@ export default function App() {
   };
 
   const toggleImageSelection = (imageName: string) => {
-    setSelectedImages(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(imageName)) {
-        newSet.delete(imageName);
-      } else {
-        newSet.add(imageName);
-      }
-      return newSet;
-    });
-  };
-
-  const selectAllImages = () => {
-    setSelectedImages(new Set(extractedImages.map(img => img.name)));
-  };
-
-  const clearAllImages = () => {
-    setSelectedImages(new Set());
+    setSelectedImageName(prev => prev === imageName ? null : imageName);
   };
 
   const reset = () => {
@@ -189,7 +210,8 @@ export default function App() {
     setErrorMessage('');
     setSessionId('');
     setExtractedImages([]);
-    setSelectedImages(new Set());
+    setSelectedImageName(null);
+    setDetectedLabels([]);
     setStep('upload');
   };
 
@@ -436,9 +458,9 @@ export default function App() {
                   )}
                 </button>
               </motion.div>
-            ) : step === 'select' ? (
+            ) : step === 'imagePicker' ? (
               <motion.div 
-                key="select"
+                key="imagePicker"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -446,58 +468,42 @@ export default function App() {
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-neutral-900">Choose Images for Occlusion Cards</h2>
-                    <p className="text-neutral-500 mt-1">Select anatomy diagrams or labeled images. We'll automatically create one card per label.</p>
+                    <button onClick={() => setStep('upload')} className="text-sm font-medium text-neutral-500 hover:text-neutral-900 mb-2">
+                      ← Back to Flashcards
+                    </button>
+                    <h2 className="text-2xl font-bold text-neutral-900">Choose Images</h2>
+                    <p className="text-neutral-500 mt-1">Found {extractedImages.length}.</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-                      Selected: {selectedImages.size} / {extractedImages.length}
+                    <span className="text-sm font-medium text-white bg-orange-500 px-3 py-1 rounded-full">
+                      Selected: {selectedImageName ? '1' : '0'}/1
                     </span>
                   </div>
                 </div>
 
-                <div className="flex gap-3">
-                  <button 
-                    onClick={selectAllImages}
-                    className="px-4 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
-                  >
-                    Select All
-                  </button>
-                  <button 
-                    onClick={clearAllImages}
-                    className="px-4 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
-                  >
-                    Clear All
-                  </button>
-                </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {extractedImages.map((img) => {
-                    const isSelected = selectedImages.has(img.name);
+                    const isSelected = selectedImageName === img.name;
                     return (
                       <div 
                         key={img.name}
                         onClick={() => toggleImageSelection(img.name)}
                         className={`
-                          relative group cursor-pointer rounded-xl overflow-hidden border-2 transition-all
-                          ${isSelected ? 'border-indigo-500 ring-4 ring-indigo-500/20' : 'border-neutral-200 hover:border-indigo-300'}
+                          relative group cursor-pointer rounded-xl overflow-hidden border-2 transition-all bg-white
+                          ${isSelected ? 'border-teal-500 ring-4 ring-teal-500/20 scale-[1.02]' : 'border-neutral-200 hover:border-teal-300'}
                         `}
                       >
-                        <div className="aspect-video bg-neutral-100 relative">
+                        <div className="aspect-video bg-white relative">
                           <img 
                             src={`data:${img.mimeType};base64,${img.data}`} 
                             alt={img.name}
                             className="w-full h-full object-contain"
                           />
-                          <div className={`
-                            absolute top-3 right-3 w-6 h-6 rounded bg-white shadow-sm flex items-center justify-center transition-colors
-                            ${isSelected ? 'text-indigo-600' : 'text-neutral-300 group-hover:text-indigo-400'}
-                          `}>
-                            {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
-                          </div>
                         </div>
-                        <div className={`p-3 text-xs truncate ${isSelected ? 'bg-indigo-50 text-indigo-700 font-medium' : 'bg-white text-neutral-500'}`}>
-                          {img.name}
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="text-white text-sm font-medium px-2 py-1 bg-black/50 rounded truncate max-w-[90%]">
+                            {img.name}
+                          </span>
                         </div>
                       </div>
                     );
@@ -513,7 +519,7 @@ export default function App() {
                   >
                     <AlertCircle className="flex-shrink-0 mt-0.5" size={20} />
                     <div>
-                      <p className="font-medium">Generation Failed</p>
+                      <p className="font-medium">Detection Failed</p>
                       <p className="text-sm opacity-90">{errorMessage}</p>
                     </div>
                   </motion.div>
@@ -521,35 +527,38 @@ export default function App() {
 
                 <div className="pt-4 border-t border-neutral-200">
                   <button
-                    onClick={() => handleGenerate()}
-                    disabled={status !== 'idle' && status !== 'error'}
+                    onClick={handleDetectLabels}
+                    disabled={!selectedImageName || (status !== 'idle' && status !== 'error')}
                     className={`
-                      w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-indigo-100
+                      w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-teal-100
                       flex items-center justify-center gap-3
-                      ${status !== 'idle' && status !== 'error'
+                      ${!selectedImageName || (status !== 'idle' && status !== 'error')
                         ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0'}
+                        : 'bg-teal-500 text-white hover:bg-teal-600 hover:shadow-teal-200 hover:-translate-y-0.5 active:translate-y-0'}
                     `}
                   >
                     {status === 'idle' || status === 'error' ? (
                       <>
-                        <span>Generate Flashcards →</span>
+                        <span>Cover Text with AI ✨</span>
                       </>
                     ) : (
                       <>
                         <Loader2 className="animate-spin" size={24} />
                         <span>
-                          {status === 'generating' && 'Generating with AI...'}
-                          {status === 'building' && 'Building .apkg file...'}
+                          {status === 'detecting' && 'Detecting labels...'}
                         </span>
                       </>
                     )}
                   </button>
-                  <p className="text-center text-sm text-neutral-500 mt-4">
-                    Selected images will get automatic occlusion cards. All other content gets Q&A cards.
-                  </p>
                 </div>
               </motion.div>
+            ) : step === 'labelEditor' && selectedImageName ? (
+              <LabelEditorStep
+                image={extractedImages.find(img => img.name === selectedImageName)!}
+                initialLabels={detectedLabels}
+                onSave={(labels) => handleGenerate(sessionId, { imageName: selectedImageName, labels })}
+                onBack={() => setStep('imagePicker')}
+              />
             ) : null}
           </AnimatePresence>
 

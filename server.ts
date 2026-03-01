@@ -8,13 +8,15 @@ import { fileURLToPath } from 'url';
 import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
-import { generateOcclusionCards } from './src/services/occlusionService';
+import { generateOcclusionCards, detectLabelsForImage, generateOcclusionCardsFromLabels } from './src/services/occlusionService';
 import dotenv from 'dotenv';
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const PORT = 3000;
 
 // Ensure uploads directory exists
@@ -36,6 +38,24 @@ const upload = multer({ dest: uploadDir });
 const sessionStore = new Map<string, any>();
 
 // API Routes
+app.post('/api/detect-labels', async (req, res) => {
+  try {
+    const { imageBase64, imageName } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'imageBase64 is required' });
+    }
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'API key not configured' });
+    }
+    const labels = await detectLabelsForImage(imageBase64, apiKey);
+    res.json({ labels });
+  } catch (error) {
+    console.error('Error detecting labels:', error);
+    res.status(500).json({ error: 'Failed to detect labels' });
+  }
+});
+
 app.post('/api/extract-images', upload.array('files'), async (req, res) => {
   try {
     const files = req.files as Express.Multer.File[];
@@ -68,7 +88,7 @@ app.post('/api/extract-images', upload.array('files'), async (req, res) => {
 
 app.post('/api/generate', upload.none(), async (req, res) => {
   try {
-    const { sessionId, deck_name, selected_images, card_types } = req.body;
+    const { sessionId, deck_name, selected_images, card_types, occlusionData } = req.body;
     
     const extractionResult = sessionStore.get(sessionId);
     if (!extractionResult) {
@@ -77,6 +97,7 @@ app.post('/api/generate', upload.none(), async (req, res) => {
     
     const selectedImageNames: string[] = JSON.parse(selected_images || '[]');
     const cardTypes: string[] = JSON.parse(card_types || '["basic"]');
+    const parsedOcclusionData = occlusionData ? JSON.parse(occlusionData) : null;
 
     if (!deck_name) {
       return res.status(400).json({ error: 'Deck name is required' });
@@ -97,8 +118,15 @@ app.post('/api/generate', upload.none(), async (req, res) => {
 
     // 2.5 Generate occlusion cards if requested
     let occlusionCards: any[] = [];
-    if (selectedImageNames.length > 0) {
-      console.log('Generating occlusion cards...');
+    if (parsedOcclusionData && parsedOcclusionData.imageName && parsedOcclusionData.labels) {
+      console.log('Generating occlusion cards from provided labels...');
+      const imageBuffer = extractionResult.images[parsedOcclusionData.imageName];
+      if (imageBuffer) {
+        occlusionCards = await generateOcclusionCardsFromLabels(parsedOcclusionData.imageName, imageBuffer, parsedOcclusionData.labels);
+        console.log(`Generated ${occlusionCards.length} occlusion cards from labels`);
+      }
+    } else if (selectedImageNames.length > 0) {
+      console.log('Generating occlusion cards automatically...');
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (apiKey) {
         occlusionCards = await generateOcclusionCards(selectedImages, apiKey);
