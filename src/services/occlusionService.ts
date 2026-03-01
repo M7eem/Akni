@@ -26,7 +26,7 @@ export async function detectLabelsForImage(
   const ai = new GoogleGenAI({ apiKey });
   
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash-exp',
+    model: 'gemini-3.1-pro-preview',
     contents: {
       role: 'user',
       parts: [
