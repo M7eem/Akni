@@ -26,22 +26,20 @@ export async function createAnkiPackage(
   const dataPath = path.join(tmpDir, `anki_data_${ts}.json`);
   const scriptPath = path.join(tmpDir, `anki_script_${ts}.py`);
 
-  // Add occlusion cards to the main cards list
-  const allCards = [...cards];
-  
-  if (occlusionCards && occlusionCards.length > 0) {
-    occlusionCards.forEach(oc => {
-      allCards.push({
-        front: oc.front,
-        back: oc.back,
-        type: 'basic' // Occlusion cards are essentially basic cards with images
-      } as any);
-      
-      // Add images to the images record
-      images[oc.frontImageName] = oc.frontImageBuffer;
-      images[oc.backImageName] = oc.backImageBuffer;
-    });
+  // Add occlusion images to the images record
+  for (const oc of occlusionCards) {
+    images[oc.frontImageName] = oc.frontImageBuffer;
+    images[oc.backImageName] = oc.backImageBuffer;
   }
+
+  // Convert occlusion cards to regular Card format and append
+  const occlusionAsCards: Card[] = occlusionCards.map(oc => ({
+    front: oc.front,
+    back: oc.back,
+    type: 'basic'
+  } as any));
+
+  const allCards = [...cards, ...occlusionAsCards];
 
   // Write cards to temp JSON file
   const cardsData = allCards.map(card => ({

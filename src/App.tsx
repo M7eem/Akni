@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Image as ImageIcon, CheckSquare, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface UploadedFile {
@@ -7,18 +7,22 @@ interface UploadedFile {
   id: string;
 }
 
-type Status = 'idle' | 'uploading' | 'processing' | 'generating' | 'building' | 'complete' | 'error';
+type Status = 'idle' | 'uploading' | 'extracting' | 'processing' | 'generating' | 'building' | 'complete' | 'error';
 
 export default function App() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [deckName, setDeckName] = useState('');
   const [cardTypes, setCardTypes] = useState<string[]>(['basic']);
-  const [includeOcclusion, setIncludeOcclusion] = useState(true);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
   const [fileName, setFileName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [sessionId, setSessionId] = useState<string>('');
+  const [extractedImages, setExtractedImages] = useState<{name: string, data: string}[]>([]);
+  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
+  const [step, setStep] = useState<'upload' | 'select' | 'complete'>('upload');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -68,29 +72,61 @@ export default function App() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleExtractImages = async () => {
     if (files.length === 0 || !deckName.trim()) return;
 
-    setStatus('uploading');
+    setStatus('extracting');
     setErrorMessage('');
     
     const formData = new FormData();
     files.forEach(f => formData.append('files', f.file));
-    formData.append('deck_name', deckName);
-    formData.append('card_types', JSON.stringify(cardTypes));
-    formData.append('include_occlusion', includeOcclusion.toString());
 
     try {
-      // Simulate progress stages for better UX since backend is monolithic
-      // In a real app with websockets we'd get real progress
+      const response = await fetch('/api/extract-images', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to extract images');
+      }
+
+      const data = await response.json();
+      setSessionId(data.sessionId);
+      setExtractedImages(data.images || []);
+      
+      if (data.images && data.images.length > 0) {
+        setStep('select');
+        setStatus('idle');
+      } else {
+        // No images found, skip selection step
+        await handleGenerate(data.sessionId, []);
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus('error');
+      setErrorMessage((error as Error).message);
+    }
+  };
+
+  const handleGenerate = async (currentSessionId: string = sessionId, imagesToOcclude: string[] = Array.from(selectedImages)) => {
+    setStatus('generating');
+    setErrorMessage('');
+    
+    const formData = new FormData();
+    formData.append('sessionId', currentSessionId);
+    formData.append('deck_name', deckName);
+    formData.append('card_types', JSON.stringify(cardTypes));
+    formData.append('selected_images', JSON.stringify(imagesToOcclude));
+
+    try {
       const progressInterval = setInterval(() => {
         setStatus(prev => {
-          if (prev === 'uploading') return 'processing';
-          if (prev === 'processing') return 'generating';
           if (prev === 'generating') return 'building';
           return prev;
         });
-      }, 3000);
+      }, 5000);
 
       const response = await fetch('/api/generate', {
         method: 'POST',
@@ -108,7 +144,6 @@ export default function App() {
       const url = window.URL.createObjectURL(blob);
       setDownloadUrl(url);
       
-      // Extract filename from content-disposition header if available, else construct it
       const contentDisposition = response.headers.get('Content-Disposition');
       let filename = `${deckName.replace(/[^a-z0-9]/gi, '_')}.apkg`;
       if (contentDisposition) {
@@ -118,11 +153,32 @@ export default function App() {
       setFileName(filename);
       
       setStatus('complete');
+      setStep('complete');
     } catch (error) {
       console.error(error);
       setStatus('error');
       setErrorMessage((error as Error).message);
     }
+  };
+
+  const toggleImageSelection = (imageName: string) => {
+    setSelectedImages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(imageName)) {
+        newSet.delete(imageName);
+      } else {
+        newSet.add(imageName);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllImages = () => {
+    setSelectedImages(new Set(extractedImages.map(img => img.name)));
+  };
+
+  const clearAllImages = () => {
+    setSelectedImages(new Set());
   };
 
   const reset = () => {
@@ -131,6 +187,10 @@ export default function App() {
     setStatus('idle');
     setDownloadUrl('');
     setErrorMessage('');
+    setSessionId('');
+    setExtractedImages([]);
+    setSelectedImages(new Set());
+    setStep('upload');
   };
 
   return (
@@ -199,7 +259,7 @@ export default function App() {
                   </button>
                 </div>
               </motion.div>
-            ) : (
+            ) : step === 'upload' ? (
               <motion.div 
                 key="form"
                 initial={{ opacity: 0 }}
@@ -335,26 +395,113 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Occlusion Toggle */}
-                <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-neutral-200">
-                  <div>
-                    <h3 className="font-medium text-neutral-900">Include Image Occlusion Cards</h3>
-                    <p className="text-sm text-neutral-500">Automatically detect labels in anatomy diagrams and create occlusion cards.</p>
-                  </div>
-                  <button
-                    onClick={() => setIncludeOcclusion(!includeOcclusion)}
-                    className={`
-                      relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2
-                      ${includeOcclusion ? 'bg-indigo-600' : 'bg-neutral-200'}
-                    `}
+                {/* Error Message */}
+                {status === 'error' && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-100 flex items-start gap-3"
                   >
-                    <span
-                      className={`
-                        inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                        ${includeOcclusion ? 'translate-x-6' : 'translate-x-1'}
-                      `}
-                    />
+                    <AlertCircle className="flex-shrink-0 mt-0.5" size={20} />
+                    <div>
+                      <p className="font-medium">Generation Failed</p>
+                      <p className="text-sm opacity-90">{errorMessage}</p>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Next Button */}
+                <button
+                  onClick={handleExtractImages}
+                  disabled={files.length === 0 || !deckName.trim() || cardTypes.length === 0 || (status !== 'idle' && status !== 'error')}
+                  className={`
+                    w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-indigo-100
+                    flex items-center justify-center gap-3
+                    ${files.length === 0 || !deckName.trim() || cardTypes.length === 0 || (status !== 'idle' && status !== 'error')
+                      ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0'}
+                  `}
+                >
+                  {status === 'idle' || status === 'error' ? (
+                    <>
+                      <span>Next: Choose Images →</span>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="animate-spin" size={24} />
+                      <span>
+                        {status === 'extracting' && 'Extracting images...'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </motion.div>
+            ) : step === 'select' ? (
+              <motion.div 
+                key="select"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-8"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-bold text-neutral-900">Choose Images for Occlusion Cards</h2>
+                    <p className="text-neutral-500 mt-1">Select anatomy diagrams or labeled images. We'll automatically create one card per label.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                      Selected: {selectedImages.size} / {extractedImages.length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={selectAllImages}
+                    className="px-4 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
+                  >
+                    Select All
                   </button>
+                  <button 
+                    onClick={clearAllImages}
+                    className="px-4 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
+                  >
+                    Clear All
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {extractedImages.map((img) => {
+                    const isSelected = selectedImages.has(img.name);
+                    return (
+                      <div 
+                        key={img.name}
+                        onClick={() => toggleImageSelection(img.name)}
+                        className={`
+                          relative group cursor-pointer rounded-xl overflow-hidden border-2 transition-all
+                          ${isSelected ? 'border-indigo-500 ring-4 ring-indigo-500/20' : 'border-neutral-200 hover:border-indigo-300'}
+                        `}
+                      >
+                        <div className="aspect-video bg-neutral-100 relative">
+                          <img 
+                            src={`data:${img.mimeType};base64,${img.data}`} 
+                            alt={img.name}
+                            className="w-full h-full object-contain"
+                          />
+                          <div className={`
+                            absolute top-3 right-3 w-6 h-6 rounded bg-white shadow-sm flex items-center justify-center transition-colors
+                            ${isSelected ? 'text-indigo-600' : 'text-neutral-300 group-hover:text-indigo-400'}
+                          `}>
+                            {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+                          </div>
+                        </div>
+                        <div className={`p-3 text-xs truncate ${isSelected ? 'bg-indigo-50 text-indigo-700 font-medium' : 'bg-white text-neutral-500'}`}>
+                          {img.name}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Error Message */}
@@ -372,36 +519,38 @@ export default function App() {
                   </motion.div>
                 )}
 
-                {/* Generate Button */}
-                <button
-                  onClick={handleGenerate}
-                  disabled={files.length === 0 || !deckName.trim() || cardTypes.length === 0 || (status !== 'idle' && status !== 'error')}
-                  className={`
-                    w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-indigo-100
-                    flex items-center justify-center gap-3
-                    ${files.length === 0 || !deckName.trim() || cardTypes.length === 0 || (status !== 'idle' && status !== 'error')
-                      ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0'}
-                  `}
-                >
-                  {status === 'idle' || status === 'error' ? (
-                    <>
-                      <span>Generate Flashcards</span>
-                    </>
-                  ) : (
-                    <>
-                      <Loader2 className="animate-spin" size={24} />
-                      <span>
-                        {status === 'uploading' && 'Uploading files...'}
-                        {status === 'processing' && 'Extracting content...'}
-                        {status === 'generating' && 'Generating with AI...'}
-                        {status === 'building' && 'Building .apkg file...'}
-                      </span>
-                    </>
-                  )}
-                </button>
+                <div className="pt-4 border-t border-neutral-200">
+                  <button
+                    onClick={() => handleGenerate()}
+                    disabled={status !== 'idle' && status !== 'error'}
+                    className={`
+                      w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-indigo-100
+                      flex items-center justify-center gap-3
+                      ${status !== 'idle' && status !== 'error'
+                        ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-indigo-200 hover:-translate-y-0.5 active:translate-y-0'}
+                    `}
+                  >
+                    {status === 'idle' || status === 'error' ? (
+                      <>
+                        <span>Generate Flashcards →</span>
+                      </>
+                    ) : (
+                      <>
+                        <Loader2 className="animate-spin" size={24} />
+                        <span>
+                          {status === 'generating' && 'Generating with AI...'}
+                          {status === 'building' && 'Building .apkg file...'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                  <p className="text-center text-sm text-neutral-500 mt-4">
+                    Selected images will get automatic occlusion cards. All other content gets Q&A cards.
+                  </p>
+                </div>
               </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
 
         </main>

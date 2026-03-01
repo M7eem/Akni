@@ -1,21 +1,21 @@
-import { GoogleGenAI, Type } from '@google/genai';
 import sharp from 'sharp';
+import { GoogleGenAI } from '@google/genai';
 
-export interface OcclusionCard {
-  front: string;        // HTML: <img src="front_filename.png">
-  back: string;         // HTML: <img src="back_filename.png"> <br><br> <b>Label text</b>
-  frontImageName: string;   // e.g. "occlusion_slide1_label0_front.png"
-  frontImageBuffer: Buffer; // the image with ONE label covered
-  backImageName: string;    // e.g. "occlusion_slide1_back.png"
-  backImageBuffer: Buffer;  // the original image unchanged
-}
-
-interface Label {
+interface DetectedLabel {
   label: string;
-  x: number;
+  x: number; // fraction 0-1
   y: number;
   w: number;
   h: number;
+}
+
+export interface OcclusionCard {
+  front: string;
+  back: string;
+  frontImageName: string;
+  frontImageBuffer: Buffer;
+  backImageName: string;
+  backImageBuffer: Buffer;
 }
 
 export async function generateOcclusionCards(
@@ -23,141 +23,100 @@ export async function generateOcclusionCards(
   apiKey: string
 ): Promise<OcclusionCard[]> {
   const ai = new GoogleGenAI({ apiKey });
-  const model = 'gemini-3.1-pro-preview'; // Or gemini-2.0-flash-exp if preferred for vision
-  const occlusionCards: OcclusionCard[] = [];
+  const allCards: OcclusionCard[] = [];
 
-  console.log(`Starting occlusion generation for ${Object.keys(images).length} images...`);
-
-  for (const [filename, buffer] of Object.entries(images)) {
+  for (const [imageName, imageBuffer] of Object.entries(images)) {
     try {
-      // Step 1: Detect labels using Gemini Vision
-      const labels = await detectLabels(ai, model, buffer);
-      
-      if (labels.length === 0) {
-        console.log(`No labels detected in ${filename}, skipping.`);
-        continue;
-      }
+      // Step 1: Ask Gemini to detect all labels
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash-exp',
+        contents: {
+          role: 'user',
+          parts: [
+            {
+              inlineData: {
+                mimeType: 'image/png',
+                data: imageBuffer.toString('base64')
+              }
+            },
+            {
+              text: `You are analyzing a medical or anatomy diagram.
+Find every text label visible in this image.
+Return ONLY a JSON array. No explanation, no markdown fences, no preamble.
+Each object:
+{
+  "label": "exact text of the label as written in the image",
+  "x": 0.25,
+  "y": 0.40,
+  "w": 0.20,
+  "h": 0.04
+}
+x, y = top-left corner of the label as a fraction of image width/height (0.0 to 1.0)
+w, h = width and height of the label as a fraction of image width/height
+If this image has no text labels (photo, chart, decorative image), return [].`
+            }
+          ]
+        }
+      });
 
-      console.log(`Detected ${labels.length} labels in ${filename}`);
+      const raw = response.text?.replace(/\`\`\`json|\`\`\`/g, '').trim() || '[]';
+      const labels: DetectedLabel[] = JSON.parse(raw);
 
-      // Step 2: Process image with sharp
-      const metadata = await sharp(buffer).metadata();
+      if (labels.length === 0) continue;
+
+      // Get image dimensions
+      const metadata = await sharp(imageBuffer).metadata();
       const width = metadata.width!;
       const height = metadata.height!;
 
-      // Create the "back" image (original)
-      // We rename it to avoid conflicts with other files
-      const backImageName = `occl_${filename.replace(/\.[^/.]+$/, '')}_back.png`;
-      
-      // We need to convert the original buffer to PNG to ensure consistency
-      const backImageBuffer = await sharp(buffer).png().toBuffer();
+      const baseName = imageName.replace('.png', '');
+      const backImageName = `occl_${baseName}_back.png`;
 
-      // Step 3: Generate a card for each label
+      // Step 2: For each label, create a card
       for (let i = 0; i < labels.length; i++) {
-        const label = labels[i];
-        
-        // Draw box over the label
-        const frontImageBuffer = await coverLabel(buffer, label, width, height);
-        const frontImageName = `occl_${filename.replace(/\.[^/.]+$/, '')}_label_${i}_front.png`;
+        const labelData = labels[i];
 
-        occlusionCards.push({
-          front: `<img src="${frontImageName}">`,
-          back: `<img src="${backImageName}"><br><br><b>${label.label}</b>`,
-          frontImageName,
-          frontImageBuffer,
-          backImageName,
-          backImageBuffer
-        });
+        try {
+          // Draw red box over this label
+          const px = Math.max(0, Math.floor(labelData.x * width));
+          const py = Math.max(0, Math.floor(labelData.y * height));
+          const pw = Math.min(width - px, Math.floor(labelData.w * width));
+          const ph = Math.min(height - py, Math.floor(labelData.h * height));
+
+          const overlay = Buffer.from(
+            `<svg width="${width}" height="${height}">
+              <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#e74c3c" rx="3"/>
+            </svg>`
+          );
+
+          const frontBuffer = await sharp(imageBuffer)
+            .composite([{ input: overlay, blend: 'over' }])
+            .png()
+            .toBuffer();
+
+          const frontImageName = `occl_${baseName}_label_${i}_front.png`;
+
+          allCards.push({
+            front: `<img src="${frontImageName}"><br><br>What structure is hidden by the <b>red box</b>?`,
+            back: `<img src="${backImageName}"><br><br><b>${labelData.label}</b>`,
+            frontImageName,
+            frontImageBuffer: frontBuffer,
+            backImageName,
+            backImageBuffer: imageBuffer
+          });
+
+        } catch (labelErr) {
+          console.warn(`Failed to process label ${i} for ${imageName}:`, labelErr);
+          continue;
+        }
       }
 
-    } catch (error) {
-      console.error(`Error processing occlusion for ${filename}:`, error);
-      // Continue to next image, don't crash
+    } catch (imageErr) {
+      console.warn(`Failed to process image ${imageName} for occlusion:`, imageErr);
+      continue;
     }
   }
 
-  return occlusionCards;
-}
-
-async function detectLabels(ai: GoogleGenAI, model: string, imageBuffer: Buffer): Promise<Label[]> {
-  const prompt = `
-You are analyzing an anatomy or medical diagram.
-Find every text label in this image.
-Return ONLY a JSON array. No explanation, no markdown fences.
-Each object in the array:
-{
-  "label": "exact text of the label",
-  "x": 0.25,   // left edge of label as fraction of image width (0.0 to 1.0)
-  "y": 0.40,   // top edge of label as fraction of image height (0.0 to 1.0)
-  "w": 0.20,   // width of label as fraction of image width
-  "h": 0.04    // height of label as fraction of image height
-}
-If this image has no text labels (e.g. it is a photo, chart, or non-anatomy image), return an empty array [].
-`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: {
-        parts: [
-          { text: prompt },
-          {
-            inlineData: {
-              mimeType: 'image/png',
-              data: imageBuffer.toString('base64')
-            }
-          }
-        ]
-      },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              label: { type: Type.STRING },
-              x: { type: Type.NUMBER },
-              y: { type: Type.NUMBER },
-              w: { type: Type.NUMBER },
-              h: { type: Type.NUMBER }
-            },
-            required: ['label', 'x', 'y', 'w', 'h']
-          }
-        }
-      }
-    });
-
-    const jsonText = response.text;
-    if (!jsonText) return [];
-    
-    return JSON.parse(jsonText) as Label[];
-  } catch (error) {
-    console.warn("Gemini Vision label detection failed:", error);
-    return [];
-  }
-}
-
-async function coverLabel(
-  imageBuffer: Buffer,
-  label: { x: number; y: number; w: number; h: number },
-  imageWidth: number,
-  imageHeight: number
-): Promise<Buffer> {
-  const px = Math.floor(label.x * imageWidth);
-  const py = Math.floor(label.y * imageHeight);
-  const pw = Math.floor(label.w * imageWidth);
-  const ph = Math.floor(label.h * imageHeight);
-
-  // Create a red rectangle as SVG overlay
-  const overlay = Buffer.from(
-    `<svg width="${imageWidth}" height="${imageHeight}">
-      <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#e74c3c"/>
-    </svg>`
-  );
-
-  return sharp(imageBuffer)
-    .composite([{ input: overlay, blend: 'over' }])
-    .png()
-    .toBuffer();
+  console.log(`Generated ${allCards.length} occlusion cards from ${Object.keys(images).length} images`);
+  return allCards;
 }

@@ -33,46 +33,75 @@ if (fs.existsSync(envPath)) {
 
 const upload = multer({ dest: uploadDir });
 
+const sessionStore = new Map<string, any>();
+
 // API Routes
-app.post('/api/generate', upload.array('files'), async (req, res) => {
+app.post('/api/extract-images', upload.array('files'), async (req, res) => {
   try {
     const files = req.files as Express.Multer.File[];
-    const deckName = req.body.deck_name;
-    let cardTypes: string[] = ['basic'];
-    
-    try {
-      if (req.body.card_types) {
-        cardTypes = JSON.parse(req.body.card_types);
-      }
-    } catch (e) {
-      console.warn('Failed to parse card_types, defaulting to basic', e);
-    }
-
     if (!files || files.length === 0) {
       return res.status(400).json({ error: 'No files uploaded' });
     }
 
-    if (!deckName) {
+    const extractionResult = await extractContent(files);
+    
+    // Return image names and base64 data for preview
+    const imageList = Object.entries(extractionResult.images).map(([name, buffer]) => ({
+      name,
+      data: (buffer as Buffer).toString('base64'),
+      mimeType: 'image/png'
+    }));
+    
+    // Store extracted content in a temp session
+    const sessionId = Date.now().toString();
+    sessionStore.set(sessionId, extractionResult);
+    
+    // Cleanup files after extraction
+    files.forEach(file => { try { fs.unlinkSync(file.path); } catch {} });
+
+    res.json({ sessionId, images: imageList });
+  } catch (error) {
+    console.error('Error extracting images:', error);
+    res.status(500).json({ error: 'Failed to extract images' });
+  }
+});
+
+app.post('/api/generate', upload.none(), async (req, res) => {
+  try {
+    const { sessionId, deck_name, selected_images, card_types } = req.body;
+    
+    const extractionResult = sessionStore.get(sessionId);
+    if (!extractionResult) {
+      return res.status(400).json({ error: 'Session expired. Please re-upload your files.' });
+    }
+    
+    const selectedImageNames: string[] = JSON.parse(selected_images || '[]');
+    const cardTypes: string[] = JSON.parse(card_types || '["basic"]');
+
+    if (!deck_name) {
       return res.status(400).json({ error: 'Deck name is required' });
     }
 
-    console.log(`Processing ${files.length} files for deck: ${deckName}`);
+    console.log(`Generating deck: ${deck_name} with ${selectedImageNames.length} selected images`);
 
-    // 1. Extract content
-    const extractionResult = await extractContent(files);
+    // Filter images to only selected ones for occlusion
+    const selectedImages: Record<string, Buffer> = {};
+    for (const name of selectedImageNames) {
+      if (extractionResult.images[name]) {
+        selectedImages[name] = extractionResult.images[name];
+      }
+    }
     
     // 2. Generate flashcards with AI
-    const cards = await generateFlashcards(extractionResult.text, extractionResult.images, deckName, cardTypes);
+    const cards = await generateFlashcards(extractionResult.text, extractionResult.images, deck_name, cardTypes);
 
     // 2.5 Generate occlusion cards if requested
-    const includeOcclusion = req.body.include_occlusion !== 'false';
     let occlusionCards: any[] = [];
-    
-    if (includeOcclusion) {
+    if (selectedImageNames.length > 0) {
       console.log('Generating occlusion cards...');
-      const apiKey = process.env.GEMINI_API_KEY;
+      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (apiKey) {
-        occlusionCards = await generateOcclusionCards(extractionResult.images, apiKey);
+        occlusionCards = await generateOcclusionCards(selectedImages, apiKey);
         console.log(`Generated ${occlusionCards.length} occlusion cards`);
       } else {
         console.warn('Skipping occlusion generation: No API key found');
@@ -86,10 +115,13 @@ app.post('/api/generate', upload.array('files'), async (req, res) => {
     }
     
     const timestamp = Date.now();
-    const outputFilename = `${deckName.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.apkg`;
+    const outputFilename = `${deck_name.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.apkg`;
     const outputPath = path.join(outputDir, outputFilename);
 
-    await createAnkiPackage(cards, outputPath, deckName, extractionResult.images, cardTypes, occlusionCards);
+    await createAnkiPackage(cards, outputPath, deck_name, extractionResult.images, cardTypes, occlusionCards);
+
+    // Cleanup session
+    sessionStore.delete(sessionId);
 
     // Verify file exists and has content
     const fileSize = fs.statSync(outputPath).size;
@@ -103,8 +135,6 @@ app.post('/api/generate', upload.array('files'), async (req, res) => {
     fileStream.pipe(res);
 
     fileStream.on('close', () => {
-      // Cleanup after stream finishes
-      files.forEach(file => { try { fs.unlinkSync(file.path); } catch {} });
       try { fs.unlinkSync(outputPath); } catch {}
     });
 
