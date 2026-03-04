@@ -1,9 +1,11 @@
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
+import { exportImages } from 'pdf-export-images';
+import { PDFParse } from 'pdf-parse';
 
 interface ExtractionResult {
   text: string;
@@ -91,92 +93,44 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
   return { text: slidesText.join('\n\n---\n\n'), images };
 }
 
-/** Resolve a PDF.js object — handles both already-resolved and pending objects */
-function resolvePdfObj(objs: any, name: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    try {
-      // Try synchronous get first (already resolved)
-      const obj = objs.get(name);
-      resolve(obj);
-    } catch {
-      // Not resolved yet — use callback form
-      try {
-        objs.get(name, (obj: any) => {
-          if (obj) resolve(obj);
-          else reject(new Error(`Object ${name} resolved to null`));
-        });
-      } catch (err) {
-        reject(err);
-      }
-    }
-  });
-}
-
 async function extractPdf(buffer: Buffer, filename: string): Promise<{ text: string; images: Record<string, Buffer> }> {
   const baseFilename = filename.replace(/\.[^.]+$/, '').replace(/\s+/g, '_');
   const images: Record<string, Buffer> = {};
-
-  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
   let fullText = '';
 
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-
-    // Extract text
-    const content = await page.getTextContent();
-    fullText += `\n[PAGE ${i}]\n${content.items.map((item: any) => item.str).join(' ')}`;
-
-    // Extract images
-    try {
-      const ops = await page.getOperatorList();
-      const imgNames = new Set<string>();
-      for (let j = 0; j < ops.fnArray.length; j++) {
-        if (ops.fnArray[j] === 85) imgNames.add(ops.argsArray[j][0]); // paintImageXObject
-      }
-
-      for (const imgName of imgNames) {
-        try {
-          const img = await resolvePdfObj((page as any).objs, imgName);
-
-          if (!img || !img.data || !img.width || !img.height) continue;
-
-          const w = img.width;
-          const h = img.height;
-          if (w < 100 || h < 100) continue; // skip tiny decorative images
-
-          const rawData = Buffer.from(img.data as Uint8Array);
-          const expectedBytes4ch = w * h * 4;
-          const expectedBytes3ch = w * h * 3;
-
-          // Auto-detect channels from actual data length
-          let channels: 3 | 4;
-          if (rawData.length === expectedBytes4ch) {
-            channels = 4;
-          } else if (rawData.length === expectedBytes3ch) {
-            channels = 3;
-          } else {
-            // Data length doesn't match either — try to infer closest
-            const ratio = rawData.length / (w * h);
-            channels = ratio > 3.5 ? 4 : 3;
-            console.warn(`Image ${imgName} (${w}x${h}): unexpected size ${rawData.length}, expected ${expectedBytes4ch} or ${expectedBytes3ch}, guessing ${channels}ch`);
-          }
-
-          const pngBuffer = await sharp(rawData, {
-            raw: { width: w, height: h, channels }
-          }).png().toBuffer();
-
-          const uniqueName = `${baseFilename}_page${i}_img_${imgName}.png`;
-          images[uniqueName] = pngBuffer;
-          fullText += `\n[IMAGE: ${uniqueName}]`;
-          console.log(`Encoded: ${uniqueName} (${w}x${h} ${channels}ch → ${pngBuffer.length} bytes)`);
-
-        } catch (imgErr) {
-          console.warn(`Failed to encode image ${imgName} on page ${i}:`, (imgErr as Error).message);
-        }
-      }
-    } catch {}
+  // Extract text using pdf-parse
+  try {
+    const parser = new PDFParse({ data: buffer });
+    const data = await parser.getText();
+    fullText = data.text;
+  } catch (err) {
+    console.warn(`Failed to extract text from PDF ${filename}:`, err);
   }
 
-  console.log(`PDF extraction: ${pdf.numPages} pages, ${Object.keys(images).length} images`);
+  // Extract images using pdf-export-images
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-extract-'));
+  const tmpPdfPath = path.join(tmpDir, 'temp.pdf');
+  
+  try {
+    fs.writeFileSync(tmpPdfPath, buffer);
+    const exportedImages = await exportImages(tmpPdfPath, tmpDir) as any[];
+    
+    for (let i = 0; i < exportedImages.length; i++) {
+      const img = exportedImages[i];
+      // Skip tiny decorative images
+      if (img.width < 100 || img.height < 100) continue;
+      
+      const imgBuffer = fs.readFileSync(img.file);
+      const uniqueName = `${baseFilename}_img_${img.name}.png`;
+      images[uniqueName] = imgBuffer;
+      fullText += `\n[IMAGE: ${uniqueName}]`;
+    }
+    console.log(`PDF extraction: ${exportedImages.length} images found, ${Object.keys(images).length} kept`);
+  } catch (err) {
+    console.error(`Failed to extract images from PDF ${filename}:`, err);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
   return { text: fullText, images };
 }

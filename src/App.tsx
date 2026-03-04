@@ -35,17 +35,17 @@ export default function App() {
   // ── File handling ──────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const newFiles = Array.from(e.target.files)
-      .filter(f => f.name.endsWith('.pptx') || f.name.endsWith('.pdf'))
-      .map(f => ({ file: f, id: Math.random().toString(36).substring(7) }));
+    const newFiles = (Array.from(e.target.files) as File[])
+      .filter((f: File) => f.name.endsWith('.pptx') || f.name.endsWith('.pdf'))
+      .map((f: File) => ({ file: f, id: Math.random().toString(36).substring(7) }));
     setFiles(prev => [...prev, ...newFiles].slice(0, 5));
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    const newFiles = Array.from(e.dataTransfer.files)
-      .filter(f => f.name.endsWith('.pptx') || f.name.endsWith('.pdf'))
-      .map(f => ({ file: f, id: Math.random().toString(36).substring(7) }));
+    const newFiles = (Array.from(e.dataTransfer.files) as File[])
+      .filter((f: File) => f.name.endsWith('.pptx') || f.name.endsWith('.pdf'))
+      .map((f: File) => ({ file: f, id: Math.random().toString(36).substring(7) }));
     setFiles(prev => [...prev, ...newFiles].slice(0, 5));
   };
 
@@ -263,14 +263,13 @@ export default function App() {
             {/* ── LABEL EDITOR ── */}
             {step === 'labelEditor' && selectedImageName && (
               <LabelEditorStep
-                key="labelEditor"
                 image={{
                   name: selectedImageName,
                   // Load image via endpoint using session — no base64 needed
                   src: `/api/image/${sessionId}/${encodeURIComponent(selectedImageName)}`
                 }}
                 initialLabels={detectedLabels}
-                onSave={(labels) => handleGenerate(sessionId, { imageName: selectedImageName, labels })}
+                onSave={(labels) => { handleGenerate(sessionId, { imageName: selectedImageName, labels }); }}
                 onBack={() => { setStep('imagePicker'); setStatus('idle'); }}
               />
             )}
