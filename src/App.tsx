@@ -82,7 +82,7 @@ export default function App() {
       setSessionId(data.sessionId);
       setExtractedImages(data.images || []);
 
-      if (data.images && data.images.length > 0) {
+      if (data.images && data.images.length > 0 && cardTypes.includes('image_occlusion')) {
         setStep('imagePicker');
         setStatus('idle');
       } else {

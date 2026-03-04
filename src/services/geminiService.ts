@@ -6,8 +6,10 @@ export async function generateFlashcards(
   deckName: string,
   cardTypes: string[] = ['basic']
 ) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY not set in environment variables");
+  let apiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY)?.trim();
+  if (apiKey === 'undefined') apiKey = undefined;
+  console.log("GeminiService API Key length:", apiKey?.length, "starts with:", apiKey?.substring(0, 4));
+  if (!apiKey) throw new Error("API key not set in environment variables");
   const ai = new GoogleGenAI({ apiKey });
   return generateWithClient(ai, text, deckName, cardTypes);
 }

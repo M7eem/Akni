@@ -4,7 +4,6 @@ import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { exportImages } from 'pdf-export-images';
 import { PDFParse } from 'pdf-parse';
 
 interface ExtractionResult {
@@ -98,38 +97,46 @@ async function extractPdf(buffer: Buffer, filename: string): Promise<{ text: str
   const images: Record<string, Buffer> = {};
   let fullText = '';
 
-  // Extract text using pdf-parse
   try {
     const parser = new PDFParse({ data: buffer });
-    const data = await parser.getText();
-    fullText = data.text;
-  } catch (err) {
-    console.warn(`Failed to extract text from PDF ${filename}:`, err);
-  }
-
-  // Extract images using pdf-export-images
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-extract-'));
-  const tmpPdfPath = path.join(tmpDir, 'temp.pdf');
-  
-  try {
-    fs.writeFileSync(tmpPdfPath, buffer);
-    const exportedImages = await exportImages(tmpPdfPath, tmpDir) as any[];
     
-    for (let i = 0; i < exportedImages.length; i++) {
-      const img = exportedImages[i];
-      // Skip tiny decorative images
-      if (img.width < 100 || img.height < 100) continue;
-      
-      const imgBuffer = fs.readFileSync(img.file);
-      const uniqueName = `${baseFilename}_img_${img.name}.png`;
-      images[uniqueName] = imgBuffer;
-      fullText += `\n[IMAGE: ${uniqueName}]`;
+    // Extract text
+    const textData = await parser.getText();
+    fullText = textData.text;
+
+    // Extract images
+    const imageData = await parser.getImage({ imageThreshold: 100, imageDataUrl: false, imageBuffer: true });
+    
+    let imgCount = 0;
+    for (const page of imageData.pages) {
+      for (const img of page.images) {
+        if (!img.data) continue;
+        
+        // Use sharp to convert raw image data to PNG if needed, or just save it directly if it's already a valid format
+        // pdf-parse returns raw bytes. We can just wrap it in a Buffer.
+        // Wait, the data is Uint8Array. We can convert it to Buffer.
+        const imgBuffer = Buffer.from(img.data);
+        const uniqueName = `${baseFilename}_img_${page.pageNumber}_${img.name}.png`;
+        
+        // Often PDF images are raw bitmaps or JPEG. We can try to normalize them using sharp
+        try {
+          const normalizedBuffer = await sharp(imgBuffer).png().toBuffer();
+          images[uniqueName] = normalizedBuffer;
+          fullText += `\n[IMAGE: ${uniqueName}]`;
+          imgCount++;
+        } catch (e) {
+          // If sharp fails, it might be an unsupported format or raw bitmap without headers.
+          // In that case, we can just save the raw buffer and hope it's a valid image (like JPEG).
+          images[uniqueName] = imgBuffer;
+          fullText += `\n[IMAGE: ${uniqueName}]`;
+          imgCount++;
+        }
+      }
     }
-    console.log(`PDF extraction: ${exportedImages.length} images found, ${Object.keys(images).length} kept`);
+    
+    console.log(`PDF extraction: ${imgCount} images kept`);
   } catch (err) {
-    console.error(`Failed to extract images from PDF ${filename}:`, err);
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    console.error(`Failed to extract from PDF ${filename}:`, err);
   }
 
   return { text: fullText, images };

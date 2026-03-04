@@ -40,7 +40,11 @@ function detectMimeType(buffer: Buffer): string {
 }
 
 function getApiKey(): string | undefined {
-  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+  const keys = [process.env.GEMINI_API_KEY, process.env.GOOGLE_API_KEY, process.env.API_KEY];
+  const validKey = keys.find(k => k && k.trim() !== '' && k.trim() !== 'undefined');
+  const key = validKey?.trim();
+  console.log("API Key length:", key?.length, "starts with:", key?.substring(0, 4));
+  return key;
 }
 
 // ── Routes ────────────────────────────────────────────────────

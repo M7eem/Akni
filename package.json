@@ -25,7 +25,7 @@
     "multer": "^2.0.2",
     "pdf-export-images": "^1.2.0",
     "pdf-parse": "^2.4.5",
-    "pdfjs-dist": "^4.4.168",
+    "pdfjs-dist": "^5.5.207",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "sharp": "^0.34.5",
