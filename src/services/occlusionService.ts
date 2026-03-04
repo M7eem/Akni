@@ -19,12 +19,25 @@ export interface OcclusionCard {
   backImageBuffer: Buffer;
 }
 
+/** Detect mime type from buffer magic bytes */
+function detectMimeType(buffer: Buffer): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return 'image/jpeg';
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return 'image/png';
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) return 'image/gif';
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) return 'image/webp';
+  return 'image/jpeg'; // PDF images are almost always JPEG
+}
+
 export async function detectLabelsForImage(
   imageBase64: string,
   apiKey: string
 ): Promise<DetectedLabel[]> {
   const ai = new GoogleGenAI({ apiKey });
-  
+
+  // Decode base64 to detect actual mime type from magic bytes
+  const buf = Buffer.from(imageBase64, 'base64');
+  const mimeType = detectMimeType(buf);
+
   const response = await ai.models.generateContent({
     model: 'gemini-3.1-pro-preview',
     contents: {
@@ -32,7 +45,7 @@ export async function detectLabelsForImage(
       parts: [
         {
           inlineData: {
-            mimeType: 'image/png',
+            mimeType,
             data: imageBase64
           }
         },
@@ -62,10 +75,9 @@ If there are no text labels in this image, return an empty array [].`
     }
   });
 
-  const raw = response.text?.replace(/\`\`\`json|\`\`\`/g, '').trim() || '[]';
+  const raw = response.text?.replace(/```json|```/g, '').trim() || '[]';
   const labels: DetectedLabel[] = JSON.parse(raw);
-  
-  // Assign IDs
+
   return labels.map((l, i) => ({ ...l, id: Date.now().toString() + i }));
 }
 
@@ -81,7 +93,7 @@ export async function generateOcclusionCardsFromLabels(
   const width = metadata.width!;
   const height = metadata.height!;
 
-  const baseName = imageName.replace('.png', '');
+  const baseName = imageName.replace(/\.[^.]+$/, ''); // strip any extension
   const backImageName = `occl_${baseName}_back.png`;
 
   for (let i = 0; i < labels.length; i++) {
@@ -133,15 +145,16 @@ export async function generateOcclusionCards(
 
   for (const [imageName, imageBuffer] of Object.entries(images)) {
     try {
-      // Step 1: Ask Gemini to detect all labels
+      const mimeType = detectMimeType(imageBuffer);
+
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp',
+        model: 'gemini-2.0-flash',
         contents: {
           role: 'user',
           parts: [
             {
               inlineData: {
-                mimeType: 'image/png',
+                mimeType,
                 data: imageBuffer.toString('base64')
               }
             },
@@ -165,25 +178,22 @@ If this image has no text labels (photo, chart, decorative image), return [].`
         }
       });
 
-      const raw = response.text?.replace(/\`\`\`json|\`\`\`/g, '').trim() || '[]';
+      const raw = response.text?.replace(/```json|```/g, '').trim() || '[]';
       const labels: DetectedLabel[] = JSON.parse(raw);
 
       if (labels.length === 0) continue;
 
-      // Get image dimensions
       const metadata = await sharp(imageBuffer).metadata();
       const width = metadata.width!;
       const height = metadata.height!;
 
-      const baseName = imageName.replace('.png', '');
+      const baseName = imageName.replace(/\.[^.]+$/, '');
       const backImageName = `occl_${baseName}_back.png`;
 
-      // Step 2: For each label, create a card
       for (let i = 0; i < labels.length; i++) {
         const labelData = labels[i];
 
         try {
-          // Draw red box over this label
           const px = Math.max(0, Math.floor(labelData.x * width));
           const py = Math.max(0, Math.floor(labelData.y * height));
           const pw = Math.min(width - px, Math.floor(labelData.w * width));
