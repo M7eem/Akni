@@ -205,45 +205,45 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
       className="space-y-4"
     >
       <div>
-        <button onClick={onBack} className="text-sm font-medium text-neutral-500 hover:text-neutral-900 mb-2">
+        <button onClick={onBack} className="text-sm font-medium text-[#8899aa] hover:text-[#eef6ff] mb-2">
           ← Back
         </button>
-        <h2 className="text-2xl font-bold text-neutral-900">Edit Occlusion Labels</h2>
-        <p className="text-neutral-500 mt-1 text-sm">
+        <h2 className="text-2xl font-bold text-[#eef6ff]">Edit Occlusion Labels</h2>
+        <p className="text-[#8899aa] mt-1 text-sm">
           AI detected <b>{labels.length}</b> label{labels.length !== 1 ? 's' : ''}. Drag to reposition, resize handles to adjust, double-click to rename, Delete key to remove.
         </p>
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap gap-2 p-2 bg-white rounded-xl border border-neutral-200 shadow-sm">
+      <div className="flex flex-wrap gap-2 p-2 bg-[#0d1117] rounded-xl border border-[rgba(255,255,255,0.05)] shadow-sm">
         <button
           onClick={() => { setAdding(!adding); setSelectedIds(new Set()); }}
           className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
-            ${adding ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-300' : 'text-neutral-700 hover:bg-neutral-100'}`}
+            ${adding ? 'bg-[rgba(125,211,252,0.1)] text-[#7dd3fc] ring-1 ring-[#7dd3fc]' : 'text-[#eef6ff] hover:bg-[rgba(255,255,255,0.05)]'}`}
         >
           <Plus size={16} /> {adding ? 'Click on image to place label' : 'Add Label'}
         </button>
         <button
           onClick={deleteSelected}
           disabled={selectedIds.size === 0}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-neutral-700 rounded-lg hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#eef6ff] rounded-lg hover:bg-red-900/20 hover:text-red-400 disabled:opacity-40 transition-colors"
         >
           <Trash2 size={16} /> Delete ({selectedIds.size})
         </button>
-        <div className="w-px h-6 bg-neutral-200 my-auto mx-1" />
-        <button onClick={undo} disabled={historyIndex === 0} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-neutral-700 rounded-lg hover:bg-neutral-100 disabled:opacity-40 transition-colors">
+        <div className="w-px h-6 bg-[rgba(255,255,255,0.1)] my-auto mx-1" />
+        <button onClick={undo} disabled={historyIndex === 0} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#eef6ff] rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-40 transition-colors">
           <Undo size={16} /> Undo
         </button>
-        <button onClick={redo} disabled={historyIndex === history.length - 1} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-neutral-700 rounded-lg hover:bg-neutral-100 disabled:opacity-40 transition-colors">
+        <button onClick={redo} disabled={historyIndex === history.length - 1} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#eef6ff] rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-40 transition-colors">
           <Redo size={16} /> Redo
         </button>
-        <div className="ml-auto text-xs text-neutral-400 self-center pr-2">
+        <div className="ml-auto text-xs text-[#8899aa] self-center pr-2">
           {labels.length} card{labels.length !== 1 ? 's' : ''} will be created
         </div>
       </div>
 
       {/* Image + Labels */}
-      <div className="bg-neutral-100 rounded-xl overflow-auto flex justify-center p-4">
+      <div className="bg-[#131820] rounded-xl overflow-auto flex justify-center p-4 border border-[rgba(255,255,255,0.05)]">
         <div
           ref={containerRef}
           className={`relative inline-block select-none ${adding ? 'cursor-crosshair' : ''}`}
@@ -280,14 +280,14 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
                 {editingId === label.id ? (
                   <input
                     autoFocus
-                    className="w-full h-full bg-white/90 text-red-600 text-xs text-center outline-none border-none p-0"
+                    className="w-full h-full bg-[#0d1117]/90 text-[#eef6ff] text-xs text-center outline-none border-none p-0"
                     value={label.text}
                     onChange={(e) => setLabels(labels.map(l => l.id === label.id ? { ...l, text: e.target.value } : l))}
                     onBlur={() => { setEditingId(null); saveToHistory(labels); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { setEditingId(null); saveToHistory(labels); } }}
                   />
                 ) : (
-                  <span className="text-[#e74c3c] text-[10px] font-bold truncate px-1 pointer-events-none leading-tight">
+                  <span className="text-[#e74c3c] text-[10px] font-bold truncate px-1 pointer-events-none leading-tight drop-shadow-md">
                     {label.text}
                   </span>
                 )}
@@ -318,21 +318,21 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
       </div>
 
       {images.length > 1 && (
-        <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-neutral-200 shadow-sm">
+        <div className="flex justify-between items-center bg-[#0d1117] p-3 rounded-xl border border-[rgba(255,255,255,0.05)] shadow-sm">
           <button
             onClick={() => setCurrentImageIndex(prev => Math.max(0, prev - 1))}
             disabled={currentImageIndex === 0}
-            className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-[#eef6ff] bg-[#131820] rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-50 transition-colors"
           >
             ← Previous Image
           </button>
-          <span className="text-sm font-medium text-neutral-600">
+          <span className="text-sm font-medium text-[#8899aa]">
             Image {currentImageIndex + 1} of {images.length}
           </span>
           <button
             onClick={() => setCurrentImageIndex(prev => Math.min(images.length - 1, prev + 1))}
             disabled={currentImageIndex === images.length - 1}
-            className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-[#eef6ff] bg-[#131820] rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-50 transition-colors"
           >
             Next Image →
           </button>
@@ -347,7 +347,7 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
           }));
           onSave(result);
         }}
-        className="w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-teal-100 bg-teal-500 text-white hover:bg-teal-600 hover:-translate-y-0.5 flex items-center justify-center gap-2"
+        className="w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-[#7dd3fc]/20 bg-[#7dd3fc] text-[#07090f] hover:opacity-90 hover:-translate-y-0.5 flex items-center justify-center gap-2"
       >
         <Check size={22} />
         Generate Flashcards →

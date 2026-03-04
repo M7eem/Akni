@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import LabelEditorStep, { Label } from './components/LabelEditorStep';
 
@@ -19,7 +19,7 @@ type Status = 'idle' | 'extracting' | 'detecting' | 'generating' | 'building' | 
 export default function App() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [deckName, setDeckName] = useState('');
-  const [cardTypes, setCardTypes] = useState<string[]>(['basic']);
+  const [cardTypes, setCardTypes] = useState<string[]>(['basic', 'cloze']);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
@@ -169,7 +169,7 @@ export default function App() {
   const reset = () => {
     setFiles([]);
     setDeckName('');
-    setCardTypes(['basic']);
+    setCardTypes(['basic', 'cloze']);
     setStatus('idle');
     setDownloadUrl('');
     setErrorMessage('');
@@ -181,129 +181,130 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
-      <div className="max-w-3xl mx-auto px-6 py-12">
+    <>
+      <div className="orb orb1"></div>
+      <div className="orb orb2"></div>
 
-        {/* Header */}
-        <header className="mb-12 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600 text-white mb-6 shadow-lg shadow-indigo-200"
-          >
-            <FileText size={32} />
-          </motion.div>
-          <motion.h1
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-4xl font-bold tracking-tight mb-3"
-          >
-            Anki Flashcard Generator
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="text-lg text-neutral-500 max-w-lg mx-auto"
-          >
-            Turn your lecture slides and PDFs into high-quality Anki flashcards instantly using AI.
-          </motion.p>
-        </header>
+      <nav>
+        <a href="/" className="logo"><div className="logo-dot"></div>iLoveAnki</a>
+        <div className="nav-links">
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+        </div>
+      </nav>
 
-        <main>
+      <section className="hero">
+        <div className="hero-label">Flashcard Generator</div>
+        <h1>Turn your lectures into<br/><span className="icy">Anki flashcards</span></h1>
+        <p className="hero-sub">Upload a PDF or PPTX and get a complete Anki deck in under a minute.</p>
+
+        <div className="deck-card" style={{ maxWidth: step === 'imagePicker' ? '800px' : '520px', transition: 'max-width 0.3s' }}>
           <AnimatePresence mode="wait">
+            
+            {/* ── UPLOAD FORM ── */}
+            {step === 'upload' && (
+              <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <div className="deck-card-title">Create your deck</div>
+                <div className="deck-card-sub">Upload your lecture and we'll do the rest</div>
 
-            {/* ── COMPLETE ── */}
-            {step === 'complete' && (
-              <motion.div
-                key="complete"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-8 text-center"
-              >
-                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <CheckCircle size={32} />
+                <div 
+                  className="upload-zone"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={handleDrop}
+                  onDragOver={e => e.preventDefault()}
+                >
+                  <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple accept=".pptx,.pdf" />
+                  <div className="upload-zone-icon">
+                    <Upload size={22} />
+                  </div>
+                  <h3>Select your lecture file</h3>
+                  <p>or drag and drop — <span>PDF</span> or <span>PPTX</span></p>
                 </div>
-                <h2 className="text-2xl font-semibold mb-2">Your Deck is Ready!</h2>
-                <p className="text-neutral-500 mb-8">Generated flashcards for "{deckName}"</p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <a
-                    href={downloadUrl}
-                    download={fileName}
-                    className="inline-flex items-center justify-center px-6 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition-colors"
-                  >
-                    <Download className="mr-2" size={20} />
-                    Download .apkg
-                  </a>
-                  <button
-                    onClick={reset}
-                    className="inline-flex items-center justify-center px-6 py-3 rounded-xl border border-neutral-200 text-neutral-700 font-medium hover:bg-neutral-50 transition-colors"
-                  >
-                    Create Another Deck
-                  </button>
+
+                {files.map(f => (
+                  <div key={f.id} className="file-row">
+                    <div className="file-row-icon">
+                      <FileText size={16} />
+                    </div>
+                    <div className="file-row-info">
+                      <div className="file-row-name">{f.file.name}</div>
+                      <div className="file-row-size">{(f.file.size / 1024 / 1024).toFixed(2)} MB</div>
+                    </div>
+                    <div className="file-row-x" onClick={() => removeFile(f.id)}>
+                      <X size={16} />
+                    </div>
+                  </div>
+                ))}
+
+                <div className="field">
+                  <span className="field-label">Deck Name</span>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Basal Ganglia, Week 4" 
+                    value={deckName}
+                    onChange={e => setDeckName(e.target.value)}
+                  />
+                </div>
+
+                <div className="field">
+                  <span className="field-label">Card Types</span>
+                  <div className="types">
+                    {[
+                      { id: 'basic', label: 'Basic Q&A' },
+                      { id: 'cloze', label: 'Cloze' },
+                      { id: 'image_occlusion', label: 'Image Occlusion' },
+                    ].map(({ id, label }) => (
+                      <button
+                        key={id}
+                        className={`type-btn ${cardTypes.includes(id) ? 'on' : ''}`}
+                        onClick={() => setCardTypes(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {errorMessage && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-200 text-sm flex items-center gap-2">
+                    <AlertCircle size={16} /> {errorMessage}
+                  </div>
+                )}
+
+                <button 
+                  className="gen-btn"
+                  onClick={handleExtractImages}
+                  disabled={!files.length || !deckName.trim() || !cardTypes.length || status === 'extracting'}
+                >
+                  {status === 'extracting' ? (
+                    <><Loader2 className="animate-spin" size={18} /> Extracting...</>
+                  ) : (
+                    <>Generate My Deck <ArrowRight size={18} /></>
+                  )}
+                </button>
+
+                <div className="trust">
+                  <div className="trust-item"><Lock size={12} /> Secure</div>
+                  <div className="trust-item"><Zap size={12} /> Under 60s</div>
+                  <div className="trust-item"><Download size={12} /> .apkg download</div>
                 </div>
               </motion.div>
-            )}
-
-            {/* ── GENERATING ── */}
-            {step === 'generating' && (
-              <motion.div
-                key="generating"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="bg-white rounded-2xl shadow-sm border border-neutral-200 p-8 text-center"
-              >
-                <Loader2 className="animate-spin mx-auto mb-6 text-indigo-600" size={48} />
-                <h2 className="text-xl font-semibold mb-2">
-                  {status === 'generating' ? 'Generating flashcards with AI...' : 'Building your .apkg file...'}
-                </h2>
-                <p className="text-neutral-500">This may take 20–60 seconds depending on file size.</p>
-              </motion.div>
-            )}
-
-            {/* ── LABEL EDITOR ── */}
-            {step === 'labelEditor' && selectedImageNames.length > 0 && (
-              <LabelEditorStep
-                images={selectedImageNames.map(name => ({
-                  name,
-                  src: `/api/image/${sessionId}/${encodeURIComponent(name)}`,
-                  initialLabels: detectedLabelsMap[name] || []
-                }))}
-                onSave={(allLabels) => { handleGenerate(sessionId, allLabels); }}
-                onBack={() => { setStep('imagePicker'); setStatus('idle'); }}
-              />
             )}
 
             {/* ── IMAGE PICKER ── */}
             {step === 'imagePicker' && (
-              <motion.div
-                key="imagePicker"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div className="flex items-center justify-between">
+              <motion.div key="imagePicker" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <div className="flex items-center justify-between mb-4">
                   <div>
-                    <button
-                      onClick={() => { setStep('upload'); setStatus('idle'); }}
-                      className="text-sm text-neutral-500 hover:text-neutral-900 mb-1 block"
-                    >
-                      ← Back
-                    </button>
-                    <h2 className="text-2xl font-bold">Choose Images</h2>
-                    <p className="text-neutral-500 text-sm">Select images to create occlusion cards. You can select multiple.</p>
+                    <div className="deck-card-title">Select Images</div>
+                    <div className="deck-card-sub">Choose diagrams for occlusion cards</div>
                   </div>
-                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${selectedImageNames.length > 0 ? 'bg-orange-500 text-white' : 'bg-neutral-200 text-neutral-600'}`}>
+                  <span className="text-xs font-semibold px-2 py-1 rounded-full bg-[rgba(125,211,252,0.1)] text-[#7dd3fc]">
                     {selectedImageNames.length} selected
                   </span>
                 </div>
 
-                {/* Image grid — loads each image via /api/image endpoint */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                   {extractedImages.map((img) => {
                     const isSelected = selectedImageNames.includes(img.name);
                     return (
@@ -312,22 +313,22 @@ export default function App() {
                         onClick={() => setSelectedImageNames(prev => 
                           prev.includes(img.name) ? prev.filter(n => n !== img.name) : [...prev, img.name]
                         )}
-                        className={`relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all bg-white
+                        className={`relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all bg-[#131820]
                           ${isSelected
-                            ? 'border-teal-500 ring-4 ring-teal-500/20 scale-[1.02]'
-                            : 'border-neutral-200 hover:border-teal-300'}`}
+                            ? 'border-[#7dd3fc] shadow-[0_0_15px_rgba(125,211,252,0.15)]'
+                            : 'border-[rgba(255,255,255,0.05)] hover:border-[rgba(125,211,252,0.3)]'}`}
                       >
-                        <div className="aspect-video bg-neutral-100 flex items-center justify-center">
+                        <div className="aspect-video flex items-center justify-center">
                           <img
                             src={`/api/image/${sessionId}/${encodeURIComponent(img.name)}`}
                             alt={img.name}
-                            className="w-full h-full object-contain bg-white"
+                            className="w-full h-full object-contain"
                             loading="lazy"
                           />
                         </div>
                         {isSelected && (
-                          <div className="absolute top-2 right-2 bg-teal-500 text-white rounded-full p-0.5">
-                            <CheckCircle size={16} />
+                          <div className="absolute top-2 right-2 bg-[#7dd3fc] text-[#07090f] rounded-full p-0.5">
+                            <CheckCircle size={14} />
                           </div>
                         )}
                       </div>
@@ -335,151 +336,160 @@ export default function App() {
                   })}
                 </div>
 
-                {status === 'error' && (
-                  <div className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-100 flex items-start gap-3">
-                    <AlertCircle className="flex-shrink-0 mt-0.5" size={20} />
-                    <div>
-                      <p className="font-medium">Error</p>
-                      <p className="text-sm">{errorMessage}</p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-3 pt-2">
+                <div className="flex flex-col gap-3">
                   <button
                     onClick={handleDetectLabels}
                     disabled={selectedImageNames.length === 0 || status === 'detecting'}
-                    className={`w-full py-4 rounded-xl font-semibold text-lg flex items-center justify-center gap-3 transition-all
-                      ${selectedImageNames.length === 0 || status === 'detecting'
-                        ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-                        : 'bg-teal-500 text-white hover:bg-teal-600 hover:-translate-y-0.5'}`}
+                    className="gen-btn"
                   >
-                    {status === 'detecting'
-                      ? <><Loader2 className="animate-spin" size={20} /> Detecting labels...</>
-                      : 'Detect Labels with AI ✨'}
+                    {status === 'detecting' ? (
+                      <><Loader2 className="animate-spin" size={18} /> Detecting Labels...</>
+                    ) : (
+                      <>Detect Labels with AI <Zap size={18} /></>
+                    )}
                   </button>
                   <button
                     onClick={() => handleGenerate(sessionId, null)}
                     disabled={status === 'detecting'}
-                    className="w-full py-3 rounded-xl font-medium text-neutral-600 border border-neutral-200 hover:bg-neutral-50 transition-all"
+                    className="w-full py-3 rounded-xl font-medium text-[#8899aa] border border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.03)] transition-all text-sm"
                   >
-                    Generate Flashcards Without Images
+                    Skip Images & Generate Deck
                   </button>
                 </div>
               </motion.div>
             )}
 
-            {/* ── UPLOAD FORM ── */}
-            {step === 'upload' && (
-              <motion.div
-                key="upload"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="space-y-6"
-              >
-                <div
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition-all
-                    ${files.length > 0 ? 'border-indigo-200 bg-indigo-50/30' : 'border-neutral-300 hover:border-indigo-400 hover:bg-neutral-50'}`}
-                >
-                  <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple accept=".pptx,.pdf" />
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4
-                    ${files.length > 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-neutral-100 text-neutral-400'}`}>
-                    <Upload size={24} />
-                  </div>
-                  <h3 className="text-lg font-medium mb-1">{files.length > 0 ? 'Add more files' : 'Upload lecture files'}</h3>
-                  <p className="text-sm text-neutral-500">Drag & drop or click — PPTX or PDF (max 5 files)</p>
+            {/* ── GENERATING ── */}
+            {step === 'generating' && (
+              <motion.div key="generating" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-8">
+                <Loader2 className="animate-spin mx-auto mb-6 text-[#7dd3fc]" size={48} />
+                <h2 className="text-xl font-bold mb-2 text-[#eef6ff]">
+                  {status === 'generating' ? 'Generating flashcards...' : 'Building .apkg file...'}
+                </h2>
+                <p className="text-[#8899aa]">This usually takes under 60 seconds.</p>
+              </motion.div>
+            )}
+
+            {/* ── COMPLETE ── */}
+            {step === 'complete' && (
+              <motion.div key="complete" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-4">
+                <div className="w-16 h-16 bg-[rgba(125,211,252,0.1)] text-[#7dd3fc] rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(125,211,252,0.15)]">
+                  <CheckCircle size={32} />
                 </div>
-
-                {files.length > 0 && (
-                  <div className="space-y-2">
-                    {files.map(f => (
-                      <div key={f.id} className="flex items-center justify-between p-4 bg-white rounded-xl border border-neutral-200">
-                        <div className="flex items-center gap-3 overflow-hidden">
-                          <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 flex-shrink-0">
-                            <FileText size={20} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium truncate">{f.file.name}</p>
-                            <p className="text-xs text-neutral-500">{(f.file.size / 1024 / 1024).toFixed(2)} MB</p>
-                          </div>
-                        </div>
-                        <button onClick={() => removeFile(f.id)} className="p-2 text-neutral-400 hover:text-red-500">
-                          <X size={20} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  <label className="block text-sm font-medium text-neutral-700">Deck Name</label>
-                  <input
-                    type="text"
-                    value={deckName}
-                    onChange={e => setDeckName(e.target.value)}
-                    placeholder="e.g. Neuroanatomy — Basal Ganglia"
-                    className="w-full px-4 py-3 rounded-xl border border-neutral-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
-                  />
+                <h2 className="text-2xl font-bold mb-2 text-[#eef6ff]">Deck Ready!</h2>
+                <p className="text-[#8899aa] mb-8">Generated "{fileName}"</p>
+                <div className="flex flex-col gap-3">
+                  <a
+                    href={downloadUrl}
+                    download={fileName}
+                    className="gen-btn"
+                  >
+                    <Download size={20} /> Download .apkg
+                  </a>
+                  <button
+                    onClick={reset}
+                    className="w-full py-3 rounded-xl font-medium text-[#8899aa] border border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.03)] transition-all text-sm"
+                  >
+                    Create Another Deck
+                  </button>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-neutral-700">Card Types</label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { id: 'basic', label: 'Basic', desc: 'Standard Q&A' },
-                      { id: 'cloze', label: 'Cloze', desc: 'Fill-in-the-blank' },
-                      { id: 'image_occlusion', label: 'Image Focus', desc: 'Visual ID cards' },
-                    ].map(({ id, label, desc }) => {
-                      const selected = cardTypes.includes(id);
-                      return (
-                        <button
-                          key={id}
-                          onClick={() => setCardTypes(prev => selected ? prev.filter(t => t !== id) : [...prev, id])}
-                          className={`px-4 py-3 rounded-xl border text-left transition-all relative
-                            ${selected ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200' : 'border-neutral-200 hover:border-indigo-300'}`}
-                        >
-                          {selected && <CheckCircle size={14} className="absolute top-2 right-2 text-indigo-600" />}
-                          <div className="font-semibold text-sm mb-0.5">{label}</div>
-                          <div className="text-xs opacity-70">{desc}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {cardTypes.length === 0 && <p className="text-xs text-red-500">Select at least one card type.</p>}
-                </div>
-
-                {status === 'error' && (
-                  <div className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-100 flex items-start gap-3">
-                    <AlertCircle className="flex-shrink-0 mt-0.5" size={20} />
-                    <div>
-                      <p className="font-medium">Failed</p>
-                      <p className="text-sm">{errorMessage}</p>
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleExtractImages}
-                  disabled={!files.length || !deckName.trim() || !cardTypes.length || status === 'extracting'}
-                  className={`w-full py-4 rounded-xl font-semibold text-lg flex items-center justify-center gap-3 transition-all shadow-lg
-                    ${!files.length || !deckName.trim() || !cardTypes.length || status === 'extracting'
-                      ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:-translate-y-0.5 shadow-indigo-100'}`}
-                >
-                  {status === 'extracting'
-                    ? <><Loader2 className="animate-spin" size={24} /> Extracting images...</>
-                    : 'Continue →'}
-                </button>
               </motion.div>
             )}
 
           </AnimatePresence>
-        </main>
-      </div>
-    </div>
+        </div>
+      </section>
+
+      {/* Label Editor Overlay */}
+      {step === 'labelEditor' && selectedImageNames.length > 0 && (
+        <LabelEditorStep
+          images={selectedImageNames.map(name => ({
+            name,
+            src: `/api/image/${sessionId}/${encodeURIComponent(name)}`,
+            initialLabels: detectedLabelsMap[name] || []
+          }))}
+          onSave={(allLabels) => { handleGenerate(sessionId, allLabels); }}
+          onBack={() => { setStep('imagePicker'); setStatus('idle'); }}
+        />
+      )}
+
+      <div className="rule"></div>
+
+      <section className="section" id="how">
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
+          <div className="section-tag">How it works</div>
+          <div className="section-h">Three steps</div>
+        </motion.div>
+        <motion.div 
+          className="steps"
+          initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          <div className="step">
+            <span className="step-n">01</span>
+            <div className="step-title">Upload your file</div>
+            <div className="step-desc">PDF or PPTX. Up to 5 files. Text and images extracted automatically.</div>
+          </div>
+          <div className="step">
+            <span className="step-n">02</span>
+            <div className="step-title">Choose card types</div>
+            <div className="step-desc">Basic, Cloze, or Image Occlusion. Pick what works for your content.</div>
+          </div>
+          <div className="step">
+            <span className="step-n">03</span>
+            <div className="step-title">Import to Anki</div>
+            <div className="step-desc">Download the .apkg file and import directly into Anki desktop or mobile.</div>
+          </div>
+        </motion.div>
+      </section>
+
+      <div className="rule"></div>
+
+      <section className="section" id="features">
+        <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
+          <div className="section-tag">Features</div>
+          <div className="section-h">Built for serious students</div>
+        </motion.div>
+        <motion.div 
+          className="features"
+          initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          <div className="feat">
+            <div className="feat-icon"><Zap size={18} /></div>
+            <div className="feat-title">Understands your content</div>
+            <div className="feat-desc">Generates cards that test mechanisms and understanding, not just definitions.</div>
+          </div>
+          <div className="feat">
+            <div className="feat-icon"><ImageIcon size={18} /></div>
+            <div className="feat-title">Image Occlusion</div>
+            <div className="feat-desc">Detects every label on anatomy diagrams and creates one card per structure.</div>
+          </div>
+          <div className="feat">
+            <div className="feat-icon"><FileText size={18} /></div>
+            <div className="feat-title">Cloze Deletions</div>
+            <div className="feat-desc">Proper Anki cloze syntax generated automatically. Only key terms are hidden.</div>
+          </div>
+          <div className="feat">
+            <div className="feat-icon"><Download size={18} /></div>
+            <div className="feat-title">Native .apkg export</div>
+            <div className="feat-desc">A proper Anki package with all media included. One click to import.</div>
+          </div>
+          <div className="feat">
+            <div className="feat-icon"><div className="w-3 h-3 rounded-full bg-current"></div></div>
+            <div className="feat-title">Dark card theme</div>
+            <div className="feat-desc">Cards come styled with a dark theme and color-coded key terms.</div>
+          </div>
+          <div className="feat">
+            <div className="feat-icon"><Zap size={18} /></div>
+            <div className="feat-title">Under 60 seconds</div>
+            <div className="feat-desc">Full deck generation including text, images and occlusion in under a minute.</div>
+          </div>
+        </motion.div>
+      </section>
+
+      <footer>
+        <a href="/" className="logo" style={{ fontSize: '15px' }}><div className="logo-dot"></div>iLoveAnki</a>
+        <p>Made for students who take studying seriously.</p>
+      </footer>
+    </>
   );
 }
