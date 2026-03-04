@@ -9,8 +9,7 @@ import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
 import { generateOcclusionCards, detectLabelsForImage, generateOcclusionCardsFromLabels } from './src/services/occlusionService';
-import dotenv from 'dotenv';
-dotenv.config();
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -19,43 +18,48 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const PORT = 3000;
 
-// Ensure uploads directory exists
+// ── Uploads directory ─────────────────────────────────────────
 const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-// Check for .env file existence for debugging
-const envPath = path.join(__dirname, '.env');
-if (fs.existsSync(envPath)) {
-  console.log('.env file found at:', envPath);
-} else {
-  console.warn('No .env file found at:', envPath);
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
 const upload = multer({ dest: uploadDir });
 
+// ── Session store ─────────────────────────────────────────────
 const sessionStore = new Map<string, any>();
 
-// API Routes
-app.post('/api/detect-labels', async (req, res) => {
-  try {
-    const { imageBase64, imageName } = req.body;
-    if (!imageBase64) {
-      return res.status(400).json({ error: 'imageBase64 is required' });
-    }
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured' });
-    }
-    const labels = await detectLabelsForImage(imageBase64, apiKey);
-    res.json({ labels });
-  } catch (error) {
-    console.error('Error detecting labels:', error);
-    res.status(500).json({ error: 'Failed to detect labels' });
-  }
+// ── Helpers ───────────────────────────────────────────────────
+
+/** Detect image mime type from buffer magic bytes.
+ *  PDF-extracted images are almost always JPEG, so we default to that. */
+function detectMimeType(buffer: Buffer): string {
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return 'image/jpeg';
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return 'image/png';
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46) return 'image/gif';
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) return 'image/webp';
+  return 'image/jpeg'; // PDF images are usually JPEG
+}
+
+function getApiKey(): string | undefined {
+  return process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+}
+
+// ── Routes ────────────────────────────────────────────────────
+
+/** Serve a single image from session by name (lazy-loading in UI) */
+app.get('/api/image/:sessionId/:imageName', (req, res) => {
+  const { sessionId, imageName } = req.params;
+  const session = sessionStore.get(sessionId);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+
+  const decodedName = decodeURIComponent(imageName);
+  const imageBuffer = session.images[decodedName] || session.images[imageName];
+  if (!imageBuffer) return res.status(404).json({ error: 'Image not found' });
+
+  res.setHeader('Content-Type', detectMimeType(imageBuffer as Buffer));
+  res.send(imageBuffer);
 });
 
+/** Extract images from uploaded files, store in session, return names only */
 app.post('/api/extract-images', upload.array('files'), async (req, res) => {
   try {
     const files = req.files as Express.Multer.File[];
@@ -64,96 +68,122 @@ app.post('/api/extract-images', upload.array('files'), async (req, res) => {
     }
 
     const extractionResult = await extractContent(files);
-    
-    // Return image names and base64 data for preview
-    const imageList = Object.entries(extractionResult.images).map(([name, buffer]) => ({
-      name,
-      data: (buffer as Buffer).toString('base64'),
-      mimeType: 'image/png'
-    }));
-    
-    // Store extracted content in a temp session
+
     const sessionId = Date.now().toString();
     sessionStore.set(sessionId, extractionResult);
-    
-    // Cleanup files after extraction
+
+    // Names only — client fetches images lazily via /api/image/:sessionId/:name
+    const imageList = Object.keys(extractionResult.images).map(name => ({ name, mimeType: 'image/png' }));
+
+    console.log(`Session ${sessionId}: ${imageList.length} images stored`);
     files.forEach(file => { try { fs.unlinkSync(file.path); } catch {} });
 
     res.json({ sessionId, images: imageList });
   } catch (error) {
     console.error('Error extracting images:', error);
-    res.status(500).json({ error: 'Failed to extract images' });
+    res.status(500).json({ error: 'Failed to extract images', details: (error as Error).message });
   }
 });
 
+/** Detect labels for an image already in session — no base64 over the wire */
+app.post('/api/detect-labels', async (req, res) => {
+  try {
+    const { sessionId, imageName } = req.body;
+    if (!sessionId || !imageName) {
+      return res.status(400).json({ error: 'sessionId and imageName are required' });
+    }
+
+    const session = sessionStore.get(sessionId);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const decodedName = decodeURIComponent(imageName);
+    const imageBuffer = session.images[decodedName] || session.images[imageName];
+    if (!imageBuffer) {
+      console.error(`Image "${decodedName}" not found. Available:`, Object.keys(session.images).slice(0, 10));
+      return res.status(404).json({ error: 'Image not found in session' });
+    }
+
+    const apiKey = getApiKey();
+    if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
+
+    const buf = imageBuffer as Buffer;
+    const mimeType = detectMimeType(buf);
+    console.log(`detect-labels: "${decodedName}" — mime: ${mimeType}, size: ${buf.length} bytes`);
+
+    if (buf.length < 100) {
+      return res.status(400).json({ error: 'Image buffer too small, likely corrupted' });
+    }
+
+    const imageBase64 = buf.toString('base64');
+    const labels = await detectLabelsForImage(imageBase64, apiKey);
+
+    res.json({ labels });
+  } catch (error) {
+    console.error('Error detecting labels:', error);
+    res.status(500).json({ error: 'Failed to detect labels', details: (error as Error).message });
+  }
+});
+
+/** Generate Anki deck from session content */
 app.post('/api/generate', upload.none(), async (req, res) => {
   try {
     const { sessionId, deck_name, selected_images, card_types, occlusionData } = req.body;
-    
+
+    if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+    if (!deck_name) return res.status(400).json({ error: 'deck_name is required' });
+
     const extractionResult = sessionStore.get(sessionId);
     if (!extractionResult) {
       return res.status(400).json({ error: 'Session expired. Please re-upload your files.' });
     }
-    
+
     const selectedImageNames: string[] = JSON.parse(selected_images || '[]');
     const cardTypes: string[] = JSON.parse(card_types || '["basic"]');
     const parsedOcclusionData = occlusionData ? JSON.parse(occlusionData) : null;
 
-    if (!deck_name) {
-      return res.status(400).json({ error: 'Deck name is required' });
-    }
+    console.log(`Generating deck: "${deck_name}", card types: ${cardTypes.join(', ')}`);
 
-    console.log(`Generating deck: ${deck_name} with ${selectedImageNames.length} selected images`);
-
-    // Filter images to only selected ones for occlusion
-    const selectedImages: Record<string, Buffer> = {};
-    for (const name of selectedImageNames) {
-      if (extractionResult.images[name]) {
-        selectedImages[name] = extractionResult.images[name];
-      }
-    }
-    
-    // 2. Generate flashcards with AI
     const cards = await generateFlashcards(extractionResult.text, extractionResult.images, deck_name, cardTypes);
+    console.log(`Generated ${cards.length} regular cards`);
 
-    // 2.5 Generate occlusion cards if requested
     let occlusionCards: any[] = [];
-    if (parsedOcclusionData && parsedOcclusionData.imageName && parsedOcclusionData.labels) {
-      console.log('Generating occlusion cards from provided labels...');
+
+    if (parsedOcclusionData?.imageName && parsedOcclusionData?.labels) {
+      console.log(`Generating occlusion cards from ${parsedOcclusionData.labels.length} labels...`);
       const imageBuffer = extractionResult.images[parsedOcclusionData.imageName];
       if (imageBuffer) {
-        occlusionCards = await generateOcclusionCardsFromLabels(parsedOcclusionData.imageName, imageBuffer, parsedOcclusionData.labels);
-        console.log(`Generated ${occlusionCards.length} occlusion cards from labels`);
+        occlusionCards = await generateOcclusionCardsFromLabels(
+          parsedOcclusionData.imageName,
+          imageBuffer,
+          parsedOcclusionData.labels
+        );
+        console.log(`Generated ${occlusionCards.length} occlusion cards`);
       }
     } else if (selectedImageNames.length > 0) {
-      console.log('Generating occlusion cards automatically...');
-      const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
+      const apiKey = getApiKey();
       if (apiKey) {
+        const selectedImages: Record<string, Buffer> = {};
+        for (const name of selectedImageNames) {
+          if (extractionResult.images[name]) selectedImages[name] = extractionResult.images[name];
+        }
         occlusionCards = await generateOcclusionCards(selectedImages, apiKey);
-        console.log(`Generated ${occlusionCards.length} occlusion cards`);
-      } else {
-        console.warn('Skipping occlusion generation: No API key found');
+        console.log(`Generated ${occlusionCards.length} auto-occlusion cards`);
       }
     }
 
-    // 3. Create .apkg file
     const outputDir = path.join(__dirname, 'output');
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir);
-    }
-    
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
+
     const timestamp = Date.now();
     const outputFilename = `${deck_name.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.apkg`;
     const outputPath = path.join(outputDir, outputFilename);
 
     await createAnkiPackage(cards, outputPath, deck_name, extractionResult.images, cardTypes, occlusionCards);
 
-    // Cleanup session
     sessionStore.delete(sessionId);
 
-    // Verify file exists and has content
     const fileSize = fs.statSync(outputPath).size;
-    console.log(`Generated .apkg file: ${outputFilename} (${fileSize} bytes)`);
+    console.log(`APKG ready: ${outputFilename} (${fileSize} bytes)`);
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${outputFilename}"`);
@@ -161,47 +191,22 @@ app.post('/api/generate', upload.none(), async (req, res) => {
 
     const fileStream = fs.createReadStream(outputPath);
     fileStream.pipe(res);
-
-    fileStream.on('close', () => {
-      try { fs.unlinkSync(outputPath); } catch {}
-    });
+    fileStream.on('close', () => { try { fs.unlinkSync(outputPath); } catch {} });
 
   } catch (error) {
     console.error('Error generating flashcards:', error);
-    if (error instanceof Error) {
-        console.error('Stack:', error.stack);
-    }
-    res.status(500).json({ 
-        error: 'Failed to generate flashcards', 
-        details: (error as Error).message,
-        stack: process.env.NODE_ENV !== 'production' ? (error as Error).stack : undefined
+    if (error instanceof Error) console.error('Stack:', error.stack);
+    res.status(500).json({
+      error: 'Failed to generate flashcards',
+      details: (error as Error).message
     });
   }
 });
 
-// Vite middleware setup
-if (process.env.NODE_ENV !== 'production') {
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-  });
-  app.use(vite.middlewares);
-} else {
-  // Serve static files in production
-  app.use(express.static(path.join(__dirname, 'dist')));
-}
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
-
-
-
+/** List available Gemini models (debug) */
 app.get('/api/models', async (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'API Key not configured' });
-  }
+  const apiKey = getApiKey();
+  if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`);
     const data = await response.json();
@@ -209,4 +214,22 @@ app.get('/api/models', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch models', details: (error as Error).message });
   }
+});
+
+// ── Vite / Static ─────────────────────────────────────────────
+if (process.env.NODE_ENV !== 'production') {
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: 'spa',
+  });
+  app.use(vite.middlewares);
+} else {
+  app.use(express.static(path.join(__dirname, 'dist')));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  });
+}
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });

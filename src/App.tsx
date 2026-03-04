@@ -8,6 +8,11 @@ interface UploadedFile {
   id: string;
 }
 
+interface ExtractedImage {
+  name: string;
+  mimeType: string;
+}
+
 type Step = 'upload' | 'imagePicker' | 'labelEditor' | 'generating' | 'complete';
 type Status = 'idle' | 'extracting' | 'detecting' | 'generating' | 'building' | 'error';
 
@@ -22,7 +27,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [sessionId, setSessionId] = useState<string>('');
-  const [extractedImages, setExtractedImages] = useState<{name: string, data: string, mimeType: string}[]>([]);
+  const [extractedImages, setExtractedImages] = useState<ExtractedImage[]>([]);
   const [selectedImageName, setSelectedImageName] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('upload');
   const [detectedLabels, setDetectedLabels] = useState<Label[]>([]);
@@ -46,7 +51,7 @@ export default function App() {
 
   const removeFile = (id: string) => setFiles(prev => prev.filter(f => f.id !== id));
 
-  // ── Safe fetch helper — never throws HTML parse errors ──────
+  // ── Safe fetch — never crashes on HTML error responses ─────
   const safeFetch = async (url: string, options: RequestInit) => {
     const response = await fetch(url, options);
     if (!response.ok) {
@@ -61,7 +66,7 @@ export default function App() {
     return response;
   };
 
-  // ── Step 1: Extract images ──────────────────────────────────
+  // ── Step 1: Extract images (names only — no base64) ────────
   const handleExtractImages = async () => {
     if (!files.length || !deckName.trim() || !cardTypes.length) return;
     setStatus('extracting');
@@ -81,7 +86,6 @@ export default function App() {
         setStep('imagePicker');
         setStatus('idle');
       } else {
-        // No images — skip picker and generate directly
         await handleGenerate(data.sessionId, null);
       }
     } catch (error) {
@@ -92,10 +96,7 @@ export default function App() {
 
   // ── Step 2: Detect labels on selected image ─────────────────
   const handleDetectLabels = async () => {
-    if (!selectedImageName) return;
-    const selectedImage = extractedImages.find(img => img.name === selectedImageName);
-    if (!selectedImage) return;
-
+    if (!selectedImageName || !sessionId) return;
     setStatus('detecting');
     setErrorMessage('');
 
@@ -103,7 +104,7 @@ export default function App() {
       const response = await safeFetch('/api/detect-labels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: selectedImage.data, imageName: selectedImage.name })
+        body: JSON.stringify({ sessionId, imageName: selectedImageName })
       });
       const data = await response.json();
       setDetectedLabels(data.labels || []);
@@ -115,7 +116,7 @@ export default function App() {
     }
   };
 
-  // ── Step 3: Generate deck ───────────────────────────────────
+  // ── Step 3: Generate deck ────────────────────────────────────
   const handleGenerate = async (
     currentSessionId: string = sessionId,
     occlusionData: { imageName: string; labels: Label[] } | null = null
@@ -132,7 +133,6 @@ export default function App() {
       formData.append('occlusionData', JSON.stringify(occlusionData));
     }
 
-    // Progress ticker
     const ticker = setInterval(() => {
       setStatus(prev => prev === 'generating' ? 'building' : prev);
     }, 6000);
@@ -176,7 +176,6 @@ export default function App() {
     setStep('upload');
   };
 
-  // ── Render ──────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
       <div className="max-w-3xl mx-auto px-6 py-12">
@@ -265,7 +264,11 @@ export default function App() {
             {step === 'labelEditor' && selectedImageName && (
               <LabelEditorStep
                 key="labelEditor"
-                image={extractedImages.find(img => img.name === selectedImageName)!}
+                image={{
+                  name: selectedImageName,
+                  // Load image via endpoint using session — no base64 needed
+                  src: `/api/image/${sessionId}/${encodeURIComponent(selectedImageName)}`
+                }}
                 initialLabels={detectedLabels}
                 onSave={(labels) => handleGenerate(sessionId, { imageName: selectedImageName, labels })}
                 onBack={() => { setStep('imagePicker'); setStatus('idle'); }}
@@ -281,7 +284,6 @@ export default function App() {
                 exit={{ opacity: 0 }}
                 className="space-y-6"
               >
-                {/* Top bar */}
                 <div className="flex items-center justify-between">
                   <div>
                     <button
@@ -298,7 +300,7 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Image grid */}
+                {/* Image grid — loads each image via /api/image endpoint */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {extractedImages.map((img) => {
                     const isSelected = selectedImageName === img.name;
@@ -311,11 +313,12 @@ export default function App() {
                             ? 'border-teal-500 ring-4 ring-teal-500/20 scale-[1.02]'
                             : 'border-neutral-200 hover:border-teal-300'}`}
                       >
-                        <div className="aspect-video">
+                        <div className="aspect-video bg-neutral-100 flex items-center justify-center">
                           <img
-                            src={`data:${img.mimeType};base64,${img.data}`}
+                            src={`/api/image/${sessionId}/${encodeURIComponent(img.name)}`}
                             alt={img.name}
                             className="w-full h-full object-contain bg-white"
+                            loading="lazy"
                           />
                         </div>
                         {isSelected && (
@@ -328,7 +331,6 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Error */}
                 {status === 'error' && (
                   <div className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-100 flex items-start gap-3">
                     <AlertCircle className="flex-shrink-0 mt-0.5" size={20} />
@@ -339,7 +341,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Buttons */}
                 <div className="flex flex-col gap-3 pt-2">
                   <button
                     onClick={handleDetectLabels}
@@ -373,15 +374,12 @@ export default function App() {
                 exit={{ opacity: 0 }}
                 className="space-y-6"
               >
-                {/* Drop zone */}
                 <div
                   onDragOver={e => e.preventDefault()}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
                   className={`cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center transition-all
-                    ${files.length > 0
-                      ? 'border-indigo-200 bg-indigo-50/30'
-                      : 'border-neutral-300 hover:border-indigo-400 hover:bg-neutral-50'}`}
+                    ${files.length > 0 ? 'border-indigo-200 bg-indigo-50/30' : 'border-neutral-300 hover:border-indigo-400 hover:bg-neutral-50'}`}
                 >
                   <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple accept=".pptx,.pdf" />
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4
@@ -392,7 +390,6 @@ export default function App() {
                   <p className="text-sm text-neutral-500">Drag & drop or click — PPTX or PDF (max 5 files)</p>
                 </div>
 
-                {/* File list */}
                 {files.length > 0 && (
                   <div className="space-y-2">
                     {files.map(f => (
@@ -414,7 +411,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Deck name */}
                 <div className="space-y-1">
                   <label className="block text-sm font-medium text-neutral-700">Deck Name</label>
                   <input
@@ -426,7 +422,6 @@ export default function App() {
                   />
                 </div>
 
-                {/* Card types */}
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-neutral-700">Card Types</label>
                   <div className="grid grid-cols-3 gap-3">
@@ -441,9 +436,7 @@ export default function App() {
                           key={id}
                           onClick={() => setCardTypes(prev => selected ? prev.filter(t => t !== id) : [...prev, id])}
                           className={`px-4 py-3 rounded-xl border text-left transition-all relative
-                            ${selected
-                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200'
-                              : 'border-neutral-200 hover:border-indigo-300'}`}
+                            ${selected ? 'border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-200' : 'border-neutral-200 hover:border-indigo-300'}`}
                         >
                           {selected && <CheckCircle size={14} className="absolute top-2 right-2 text-indigo-600" />}
                           <div className="font-semibold text-sm mb-0.5">{label}</div>
@@ -452,12 +445,9 @@ export default function App() {
                       );
                     })}
                   </div>
-                  {cardTypes.length === 0 && (
-                    <p className="text-xs text-red-500">Select at least one card type.</p>
-                  )}
+                  {cardTypes.length === 0 && <p className="text-xs text-red-500">Select at least one card type.</p>}
                 </div>
 
-                {/* Error */}
                 {status === 'error' && (
                   <div className="p-4 rounded-xl bg-red-50 text-red-700 border border-red-100 flex items-start gap-3">
                     <AlertCircle className="flex-shrink-0 mt-0.5" size={20} />
@@ -468,7 +458,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Next button */}
                 <button
                   onClick={handleExtractImages}
                   disabled={!files.length || !deckName.trim() || !cardTypes.length || status === 'extracting'}
