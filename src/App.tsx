@@ -28,9 +28,9 @@ export default function App() {
 
   const [sessionId, setSessionId] = useState<string>('');
   const [extractedImages, setExtractedImages] = useState<ExtractedImage[]>([]);
-  const [selectedImageName, setSelectedImageName] = useState<string | null>(null);
+  const [selectedImageNames, setSelectedImageNames] = useState<string[]>([]);
   const [step, setStep] = useState<Step>('upload');
-  const [detectedLabels, setDetectedLabels] = useState<Label[]>([]);
+  const [detectedLabelsMap, setDetectedLabelsMap] = useState<Record<string, Label[]>>({});
 
   // ── File handling ──────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,20 +94,24 @@ export default function App() {
     }
   };
 
-  // ── Step 2: Detect labels on selected image ─────────────────
+  // ── Step 2: Detect labels on selected images ─────────────────
   const handleDetectLabels = async () => {
-    if (!selectedImageName || !sessionId) return;
+    if (selectedImageNames.length === 0 || !sessionId) return;
     setStatus('detecting');
     setErrorMessage('');
 
     try {
-      const response = await safeFetch('/api/detect-labels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, imageName: selectedImageName })
-      });
-      const data = await response.json();
-      setDetectedLabels(data.labels || []);
+      const allLabels: Record<string, Label[]> = {};
+      for (const imageName of selectedImageNames) {
+        const response = await safeFetch('/api/detect-labels', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, imageName })
+        });
+        const data = await response.json();
+        allLabels[imageName] = data.labels || [];
+      }
+      setDetectedLabelsMap(allLabels);
       setStep('labelEditor');
       setStatus('idle');
     } catch (error) {
@@ -119,7 +123,7 @@ export default function App() {
   // ── Step 3: Generate deck ────────────────────────────────────
   const handleGenerate = async (
     currentSessionId: string = sessionId,
-    occlusionData: { imageName: string; labels: Label[] } | null = null
+    occlusionData: { imageName: string; labels: Label[] }[] | null = null
   ) => {
     setStep('generating');
     setStatus('generating');
@@ -171,8 +175,8 @@ export default function App() {
     setErrorMessage('');
     setSessionId('');
     setExtractedImages([]);
-    setSelectedImageName(null);
-    setDetectedLabels([]);
+    setSelectedImageNames([]);
+    setDetectedLabelsMap({});
     setStep('upload');
   };
 
@@ -261,15 +265,14 @@ export default function App() {
             )}
 
             {/* ── LABEL EDITOR ── */}
-            {step === 'labelEditor' && selectedImageName && (
+            {step === 'labelEditor' && selectedImageNames.length > 0 && (
               <LabelEditorStep
-                image={{
-                  name: selectedImageName,
-                  // Load image via endpoint using session — no base64 needed
-                  src: `/api/image/${sessionId}/${encodeURIComponent(selectedImageName)}`
-                }}
-                initialLabels={detectedLabels}
-                onSave={(labels) => { handleGenerate(sessionId, { imageName: selectedImageName, labels }); }}
+                images={selectedImageNames.map(name => ({
+                  name,
+                  src: `/api/image/${sessionId}/${encodeURIComponent(name)}`,
+                  initialLabels: detectedLabelsMap[name] || []
+                }))}
+                onSave={(allLabels) => { handleGenerate(sessionId, allLabels); }}
                 onBack={() => { setStep('imagePicker'); setStatus('idle'); }}
               />
             )}
@@ -292,21 +295,23 @@ export default function App() {
                       ← Back
                     </button>
                     <h2 className="text-2xl font-bold">Choose Images</h2>
-                    <p className="text-neutral-500 text-sm">Found {extractedImages.length}. Select one for image occlusion.</p>
+                    <p className="text-neutral-500 text-sm">Select images to create occlusion cards. You can select multiple.</p>
                   </div>
-                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${selectedImageName ? 'bg-orange-500 text-white' : 'bg-neutral-200 text-neutral-600'}`}>
-                    Selected: {selectedImageName ? '1' : '0'}/1
+                  <span className={`text-sm font-semibold px-3 py-1 rounded-full ${selectedImageNames.length > 0 ? 'bg-orange-500 text-white' : 'bg-neutral-200 text-neutral-600'}`}>
+                    {selectedImageNames.length} selected
                   </span>
                 </div>
 
                 {/* Image grid — loads each image via /api/image endpoint */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {extractedImages.map((img) => {
-                    const isSelected = selectedImageName === img.name;
+                    const isSelected = selectedImageNames.includes(img.name);
                     return (
                       <div
                         key={img.name}
-                        onClick={() => setSelectedImageName(prev => prev === img.name ? null : img.name)}
+                        onClick={() => setSelectedImageNames(prev => 
+                          prev.includes(img.name) ? prev.filter(n => n !== img.name) : [...prev, img.name]
+                        )}
                         className={`relative cursor-pointer rounded-xl overflow-hidden border-2 transition-all bg-white
                           ${isSelected
                             ? 'border-teal-500 ring-4 ring-teal-500/20 scale-[1.02]'
@@ -343,22 +348,22 @@ export default function App() {
                 <div className="flex flex-col gap-3 pt-2">
                   <button
                     onClick={handleDetectLabels}
-                    disabled={!selectedImageName || status === 'detecting'}
+                    disabled={selectedImageNames.length === 0 || status === 'detecting'}
                     className={`w-full py-4 rounded-xl font-semibold text-lg flex items-center justify-center gap-3 transition-all
-                      ${!selectedImageName || status === 'detecting'
+                      ${selectedImageNames.length === 0 || status === 'detecting'
                         ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed'
                         : 'bg-teal-500 text-white hover:bg-teal-600 hover:-translate-y-0.5'}`}
                   >
                     {status === 'detecting'
                       ? <><Loader2 className="animate-spin" size={20} /> Detecting labels...</>
-                      : 'Cover Text with AI ✨'}
+                      : 'Detect Labels with AI ✨'}
                   </button>
                   <button
                     onClick={() => handleGenerate(sessionId, null)}
                     disabled={status === 'detecting'}
                     className="w-full py-3 rounded-xl font-medium text-neutral-600 border border-neutral-200 hover:bg-neutral-50 transition-all"
                   >
-                    Skip — Generate Without Occlusion
+                    Generate Flashcards Without Images
                   </button>
                 </div>
               </motion.div>
@@ -467,7 +472,7 @@ export default function App() {
                 >
                   {status === 'extracting'
                     ? <><Loader2 className="animate-spin" size={24} /> Extracting images...</>
-                    : 'Next: Choose Images →'}
+                    : 'Continue →'}
                 </button>
               </motion.div>
             )}

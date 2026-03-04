@@ -105,12 +105,15 @@ async function extractPdf(buffer: Buffer, filename: string): Promise<{ text: str
     fullText = textData.text;
 
     // Extract images
-    const imageData = await parser.getImage({ imageThreshold: 100, imageDataUrl: false, imageBuffer: true });
+    const imageData = await parser.getImage({ imageThreshold: 150, imageDataUrl: false, imageBuffer: true });
     
     let imgCount = 0;
     for (const page of imageData.pages) {
       for (const img of page.images) {
         if (!img.data) continue;
+        
+        // Skip small images
+        if (img.width < 150 || img.height < 150) continue;
         
         // Use sharp to convert raw image data to PNG if needed, or just save it directly if it's already a valid format
         // pdf-parse returns raw bytes. We can just wrap it in a Buffer.

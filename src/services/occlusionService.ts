@@ -50,26 +50,28 @@ export async function detectLabelsForImage(
           }
         },
         {
-          text: `You are analyzing a medical or anatomy diagram image.
-Detect every text label visible in this image.
-Return ONLY a valid JSON array. No explanation, no markdown, no preamble.
+          text: `You are analyzing a medical or anatomy diagram.
 
-Each object in the array:
+Your job is to find IMPORTANT anatomical text labels — words or phrases that point to a specific structure in the diagram using a line or arrow.
+
+STRICT RULES:
+- ONLY include labels that are connected to a structure by a visible line or arrow
+- IGNORE: slide numbers, page numbers, single digits, copyright symbols, watermarks, decorative text, logos, scale bars, footnotes
+- IGNORE: any text smaller than what a normal anatomy label would be (very small print)
+- IGNORE: labels that are part of a title, heading, or caption — not pointing at a structure
+- A label must be meaningful anatomical terminology to be included
+
+Return ONLY a valid JSON array. No markdown, no explanation.
+Each object:
 {
-  "label": "exact text as written in the image",
-  "x": 0.12,
-  "y": 0.35,
-  "w": 0.18,
-  "h": 0.045
+  "label": "exact text of the label",
+  "x": 0.12,   ← left edge as fraction of image width
+  "y": 0.35,   ← top edge as fraction of image height
+  "w": 0.18,   ← width as fraction of image width
+  "h": 0.045   ← height as fraction of image height
 }
 
-x = left edge of label text as fraction of total image width (0.0 to 1.0)
-y = top edge of label text as fraction of total image height (0.0 to 1.0)  
-w = width of label text area as fraction of image width
-h = height of label text area as fraction of image height
-
-Be precise. Include EVERY label you can see.
-If there are no text labels in this image, return an empty array [].`
+If no valid anatomical labels exist, return [].`
         }
       ]
     }

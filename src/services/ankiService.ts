@@ -109,7 +109,7 @@ deck_id = random.randint(1000000000, 9999999999)
 model_id_basic = random.randint(1000000000, 9999999999)
 model_id_cloze = random.randint(1000000000, 9999999999)
 
-css = """.card{font-family:Arial,sans-serif;font-size:20px;text-align:center;color:#e8e8e8;background-color:#2b2b2b;padding:20px 60px;line-height:1.8}b{color:#7dd8f8;font-weight:bold}hr#answer{border:none;border-top:1px solid #555;margin:16px 0}.cloze{font-weight:bold;color:#7dd8f8}"""
+css = """.card{font-family:Arial,sans-serif;font-size:20px;text-align:center;color:#e8e8e8;background-color:#2b2b2b;padding:0 60px 20px 60px;line-height:1.8}b{color:#7dd8f8;font-weight:bold}hr#answer{border:none;border-top:1px solid #555;margin:16px 0}.cloze{font-weight:bold;color:#7dd8f8}"""
 
 # Basic Model
 basic_model = {

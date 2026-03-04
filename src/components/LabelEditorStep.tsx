@@ -12,45 +12,78 @@ export interface Label {
 }
 
 interface Props {
-  image: {
+  images: {
     name: string;
-    src: string; // URL — fetched via /api/image/:sessionId/:name
-  };
-  initialLabels: Label[];
-  onSave: (labels: Label[]) => void;
+    src: string;
+    initialLabels: Label[];
+  }[];
+  onSave: (allLabels: { imageName: string; labels: Label[] }[]) => void;
   onBack: () => void;
 }
 
-export default function LabelEditorStep({ image, initialLabels, onSave, onBack }: Props) {
-  const [labels, setLabels] = useState<Label[]>(initialLabels);
+export default function LabelEditorStep({ images, onSave, onBack }: Props) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const currentImage = images[currentImageIndex];
+
+  // State for all images
+  const [allLabels, setAllLabels] = useState<Record<string, Label[]>>(() => {
+    const initial: Record<string, Label[]> = {};
+    images.forEach(img => {
+      initial[img.name] = img.initialLabels;
+    });
+    return initial;
+  });
+
+  const labels = allLabels[currentImage.name] || [];
+  const setLabels = (newLabels: Label[]) => {
+    setAllLabels(prev => ({ ...prev, [currentImage.name]: newLabels }));
+  };
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [dragging, setDragging] = useState<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
   const [resizing, setResizing] = useState<{ id: string; handle: string; startX: number; startY: number; origX: number; origY: number; origW: number; origH: number } | null>(null);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [history, setHistory] = useState<Label[][]>([initialLabels]);
-  const [historyIndex, setHistoryIndex] = useState(0);
+
+  // History per image
+  const [historyMap, setHistoryMap] = useState<Record<string, Label[][]>>(() => {
+    const initial: Record<string, Label[][]> = {};
+    images.forEach(img => {
+      initial[img.name] = [img.initialLabels];
+    });
+    return initial;
+  });
+  const [historyIndexMap, setHistoryIndexMap] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    images.forEach(img => {
+      initial[img.name] = 0;
+    });
+    return initial;
+  });
+
+  const history = historyMap[currentImage.name] || [];
+  const historyIndex = historyIndexMap[currentImage.name] || 0;
 
   const containerRef = useRef<HTMLDivElement>(null);
 
   const saveToHistory = (newLabels: Label[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(newLabels);
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
+    setHistoryMap(prev => ({ ...prev, [currentImage.name]: newHistory }));
+    setHistoryIndexMap(prev => ({ ...prev, [currentImage.name]: newHistory.length - 1 }));
     setLabels(newLabels);
   };
 
   const undo = () => {
     if (historyIndex > 0) {
-      setHistoryIndex(historyIndex - 1);
+      setHistoryIndexMap(prev => ({ ...prev, [currentImage.name]: historyIndex - 1 }));
       setLabels(history[historyIndex - 1]);
     }
   };
 
   const redo = () => {
     if (historyIndex < history.length - 1) {
-      setHistoryIndex(historyIndex + 1);
+      setHistoryIndexMap(prev => ({ ...prev, [currentImage.name]: historyIndex + 1 }));
       setLabels(history[historyIndex + 1]);
     }
   };
@@ -188,7 +221,7 @@ export default function LabelEditorStep({ image, initialLabels, onSave, onBack }
           className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
             ${adding ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-300' : 'text-neutral-700 hover:bg-neutral-100'}`}
         >
-          <Plus size={16} /> {adding ? 'Click image to place...' : 'Add Label'}
+          <Plus size={16} /> {adding ? 'Click on image to place label' : 'Add Label'}
         </button>
         <button
           onClick={deleteSelected}
@@ -218,8 +251,8 @@ export default function LabelEditorStep({ image, initialLabels, onSave, onBack }
         >
           {/* ← Fixed: use src URL directly, no base64 needed */}
           <img
-            src={image.src}
-            alt={image.name}
+            src={currentImage.src}
+            alt={currentImage.name}
             className="max-w-[900px] w-full h-auto block shadow-md rounded"
             draggable={false}
           />
@@ -284,12 +317,40 @@ export default function LabelEditorStep({ image, initialLabels, onSave, onBack }
         </div>
       </div>
 
+      {images.length > 1 && (
+        <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-neutral-200 shadow-sm">
+          <button
+            onClick={() => setCurrentImageIndex(prev => Math.max(0, prev - 1))}
+            disabled={currentImageIndex === 0}
+            className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 disabled:opacity-50 transition-colors"
+          >
+            ← Previous Image
+          </button>
+          <span className="text-sm font-medium text-neutral-600">
+            Image {currentImageIndex + 1} of {images.length}
+          </span>
+          <button
+            onClick={() => setCurrentImageIndex(prev => Math.min(images.length - 1, prev + 1))}
+            disabled={currentImageIndex === images.length - 1}
+            className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 rounded-lg hover:bg-neutral-200 disabled:opacity-50 transition-colors"
+          >
+            Next Image →
+          </button>
+        </div>
+      )}
+
       <button
-        onClick={() => onSave(labels)}
+        onClick={() => {
+          const result = images.map(img => ({
+            imageName: img.name,
+            labels: allLabels[img.name] || []
+          }));
+          onSave(result);
+        }}
         className="w-full py-4 rounded-xl font-semibold text-lg transition-all shadow-lg shadow-teal-100 bg-teal-500 text-white hover:bg-teal-600 hover:-translate-y-0.5 flex items-center justify-center gap-2"
       >
         <Check size={22} />
-        Generate Flashcards ({labels.length} occlusion card{labels.length !== 1 ? 's' : ''})
+        Generate Flashcards →
       </button>
     </motion.div>
   );

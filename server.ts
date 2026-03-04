@@ -152,7 +152,23 @@ app.post('/api/generate', upload.none(), async (req, res) => {
 
     let occlusionCards: any[] = [];
 
-    if (parsedOcclusionData?.imageName && parsedOcclusionData?.labels) {
+    if (Array.isArray(parsedOcclusionData)) {
+      console.log(`Generating occlusion cards from ${parsedOcclusionData.length} images...`);
+      for (const item of parsedOcclusionData) {
+        if (item.imageName && item.labels && item.labels.length > 0) {
+          const imageBuffer = extractionResult.images[item.imageName];
+          if (imageBuffer) {
+            const cards = await generateOcclusionCardsFromLabels(
+              item.imageName,
+              imageBuffer,
+              item.labels
+            );
+            occlusionCards.push(...cards);
+          }
+        }
+      }
+      console.log(`Generated ${occlusionCards.length} total occlusion cards`);
+    } else if (parsedOcclusionData?.imageName && parsedOcclusionData?.labels) {
       console.log(`Generating occlusion cards from ${parsedOcclusionData.labels.length} labels...`);
       const imageBuffer = extractionResult.images[parsedOcclusionData.imageName];
       if (imageBuffer) {
