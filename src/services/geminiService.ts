@@ -18,7 +18,7 @@ async function generateWithClient(
   deckName: string,
   cardTypes: string[]
 ) {
-  const model = 'gemini-2.5-pro-preview-03-25';
+  const model = 'gemini-3.1-pro-preview';
 
   const systemPrompt = `
 You are an expert medical educator creating Anki flashcards for medical students.
