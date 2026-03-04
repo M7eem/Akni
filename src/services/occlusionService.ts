@@ -50,28 +50,39 @@ export async function detectLabelsForImage(
           }
         },
         {
-          text: `You are analyzing a medical or anatomy diagram.
+          text: `You are analyzing a medical or anatomy diagram to find text labels for image occlusion flashcards.
 
-Your job is to find IMPORTANT anatomical text labels — words or phrases that point to a specific structure in the diagram using a line or arrow.
+WHAT TO INCLUDE:
+- Every visible text label that names an anatomical structure
+- Labels connected to a structure by a line, arrow, or pointer
+- Both short labels (e.g. "Vermis") and multi-line labels (e.g. "Spinocerebellum")
 
-STRICT RULES:
-- ONLY include labels that are connected to a structure by a visible line or arrow
-- IGNORE: slide numbers, page numbers, single digits, copyright symbols, watermarks, decorative text, logos, scale bars, footnotes
-- IGNORE: any text smaller than what a normal anatomy label would be (very small print)
-- IGNORE: labels that are part of a title, heading, or caption — not pointing at a structure
-- A label must be meaningful anatomical terminology to be included
+WHAT TO EXCLUDE:
+- Slide numbers, page numbers, single digits or letters
+- Copyright text, watermarks, scale bars, logos
+- Titles, headings, or captions that describe the whole image
+- Any text that is decorative or not labeling a specific structure
 
-Return ONLY a valid JSON array. No markdown, no explanation.
-Each object:
-{
-  "label": "exact text of the label",
-  "x": 0.12,   ← left edge as fraction of image width
-  "y": 0.35,   ← top edge as fraction of image height
-  "w": 0.18,   ← width as fraction of image width
-  "h": 0.045   ← height as fraction of image height
-}
+BOUNDING BOX RULES — this is critical:
+- x, y, w, h must be as TIGHT as possible around the text characters only
+- x = left edge of the FIRST character, NOT the start of a pointing line
+- y = top edge of the FIRST character, NOT above it
+- w = width from first to last character of the longest line only
+- h = total height of all lines of text for multi-line labels
+- Do NOT include whitespace, arrows, lines, or surrounding space in the box
+- For multi-line labels, cover all lines in a single box
+- Coordinates are fractions of the full image dimensions (0.0 to 1.0)
+- Be precise to 3 decimal places
 
-If no valid anatomical labels exist, return [].`
+Return ONLY a valid JSON array. No markdown fences, no explanation, no preamble.
+
+Format:
+[
+  { "label": "Spinocerebellum", "x": 0.423, "y": 0.041, "w": 0.198, "h": 0.048 },
+  { "label": "Vermis", "x": 0.751, "y": 0.098, "w": 0.072, "h": 0.042 }
+]
+
+If no anatomical labels are present, return [].`
         }
       ]
     }
@@ -102,10 +113,11 @@ export async function generateOcclusionCardsFromLabels(
     const labelData = labels[i];
 
     try {
-      const px = Math.max(0, Math.floor(labelData.x * width));
-      const py = Math.max(0, Math.floor(labelData.y * height));
-      const pw = Math.min(width - px, Math.floor(labelData.w * width));
-      const ph = Math.min(height - py, Math.floor(labelData.h * height));
+      const pad = 0.008; // 0.8% of image dimensions as padding
+      const px = Math.max(0, Math.floor((labelData.x - pad) * width));
+      const py = Math.max(0, Math.floor((labelData.y - pad) * height));
+      const pw = Math.min(width - px, Math.floor((labelData.w + pad * 2) * width));
+      const ph = Math.min(height - py, Math.floor((labelData.h + pad * 2) * height));
 
       const overlay = Buffer.from(
         `<svg width="${width}" height="${height}">
@@ -161,20 +173,39 @@ export async function generateOcclusionCards(
               }
             },
             {
-              text: `You are analyzing a medical or anatomy diagram.
-Find every text label visible in this image.
-Return ONLY a JSON array. No explanation, no markdown fences, no preamble.
-Each object:
-{
-  "label": "exact text of the label as written in the image",
-  "x": 0.25,
-  "y": 0.40,
-  "w": 0.20,
-  "h": 0.04
-}
-x, y = top-left corner of the label as a fraction of image width/height (0.0 to 1.0)
-w, h = width and height of the label as a fraction of image width/height
-If this image has no text labels (photo, chart, decorative image), return [].`
+              text: `You are analyzing a medical or anatomy diagram to find text labels for image occlusion flashcards.
+
+WHAT TO INCLUDE:
+- Every visible text label that names an anatomical structure
+- Labels connected to a structure by a line, arrow, or pointer
+- Both short labels (e.g. "Vermis") and multi-line labels (e.g. "Spinocerebellum")
+
+WHAT TO EXCLUDE:
+- Slide numbers, page numbers, single digits or letters
+- Copyright text, watermarks, scale bars, logos
+- Titles, headings, or captions that describe the whole image
+- Any text that is decorative or not labeling a specific structure
+
+BOUNDING BOX RULES — this is critical:
+- x, y, w, h must be as TIGHT as possible around the text characters only
+- x = left edge of the FIRST character, NOT the start of a pointing line
+- y = top edge of the FIRST character, NOT above it
+- w = width from first to last character of the longest line only
+- h = total height of all lines of text for multi-line labels
+- Do NOT include whitespace, arrows, lines, or surrounding space in the box
+- For multi-line labels, cover all lines in a single box
+- Coordinates are fractions of the full image dimensions (0.0 to 1.0)
+- Be precise to 3 decimal places
+
+Return ONLY a valid JSON array. No markdown fences, no explanation, no preamble.
+
+Format:
+[
+  { "label": "Spinocerebellum", "x": 0.423, "y": 0.041, "w": 0.198, "h": 0.048 },
+  { "label": "Vermis", "x": 0.751, "y": 0.098, "w": 0.072, "h": 0.042 }
+]
+
+If no anatomical labels are present, return [].`
             }
           ]
         }
@@ -196,10 +227,11 @@ If this image has no text labels (photo, chart, decorative image), return [].`
         const labelData = labels[i];
 
         try {
-          const px = Math.max(0, Math.floor(labelData.x * width));
-          const py = Math.max(0, Math.floor(labelData.y * height));
-          const pw = Math.min(width - px, Math.floor(labelData.w * width));
-          const ph = Math.min(height - py, Math.floor(labelData.h * height));
+          const pad = 0.008; // 0.8% of image dimensions as padding
+          const px = Math.max(0, Math.floor((labelData.x - pad) * width));
+          const py = Math.max(0, Math.floor((labelData.y - pad) * height));
+          const pw = Math.min(width - px, Math.floor((labelData.w + pad * 2) * width));
+          const ph = Math.min(height - py, Math.floor((labelData.h + pad * 2) * height));
 
           const overlay = Buffer.from(
             `<svg width="${width}" height="${height}">
