@@ -1,14 +1,24 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
-export async function generateFlashcards(text: string, images: Record<string, Buffer>, deckName: string, cardTypes: string[] = ['basic']) {
+export async function generateFlashcards(
+  text: string,
+  images: Record<string, Buffer>,
+  deckName: string,
+  cardTypes: string[] = ['basic']
+) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY not set in environment variables");
   const ai = new GoogleGenAI({ apiKey });
-  return generateWithClient(ai, text, images, deckName, cardTypes);
+  return generateWithClient(ai, text, deckName, cardTypes);
 }
 
-async function generateWithClient(ai: GoogleGenAI, text: string, images: Record<string, Buffer>, deckName: string, cardTypes: string[]) {
-  const model = 'gemini-3.1-pro-preview';
+async function generateWithClient(
+  ai: GoogleGenAI,
+  text: string,
+  deckName: string,
+  cardTypes: string[]
+) {
+  const model = 'gemini-2.5-pro-preview-03-25';
 
   const systemPrompt = `
 You are an expert medical educator creating Anki flashcards for medical students.
@@ -52,15 +62,6 @@ CLOZE CARDS (Fill-in-the-blank)
 - Back: any additional explanation or clinical relevance (optional)
 ` : ''}
 
-${cardTypes.includes('image_occlusion') ? `
-IMAGE FOCUS CARDS (Visual Identification)
-- Only generate these when an image is genuinely useful for understanding
-- Front: ask to identify a specific structure, region, or pathway shown in the image
-- Back: the answer with a complete explanation of what the structure is and why it matters clinically
-- Never generate image cards for decorative or non-informative images
-- JSON type: "image_occlusion"
-` : ''}
-
 ---
 
 CARD PHILOSOPHY:
@@ -90,13 +91,9 @@ STRICTLY FORBIDDEN:
 - Do not pad the deck to reach a number
 - Do not generate vague one-word answers
 
-IMAGE RULES:
-- If an image is provided and relevant to a card, include its exact filename in the image field
-- Set image to null if no image applies
-
 OUTPUT FORMAT:
 Return a JSON array only. No preamble, no explanation, no markdown fences.
-Each card object must include a "type" field.
+Each card object must include a "type" field and image must always be null.
 
 Example:
 [
@@ -111,33 +108,14 @@ Example:
     "front": "The {{c1::Subthalamic Nucleus}} uses {{c2::glutamate}} to excite the Globus Pallidus internal.",
     "back": "This is why a Subthalamic Nucleus lesion causes hemiballismus — GPi becomes underactive and the thalamus is disinhibited.",
     "image": null
-  },
-  {
-    "type": "image_occlusion",
-    "front": "Identify the labeled structure and explain its role in motor control.",
-    "back": "This is the <b>Substantia Nigra pars compacta (SNc)</b>.<br>It produces <b>dopamine</b> and projects to the striatum via the nigrostriatal pathway.<br>Its degeneration causes <b>Parkinson's disease</b>.",
-    "image": "slide_4_img_1.png"
   }
 ]
-
 `;
 
-  const parts: any[] = [];
-
-  let imageCount = 0;
-  for (const name of Object.keys(images)) {
-    if (imageCount >= 15) break;
-    parts.push({
-      inlineData: {
-        mimeType: 'image/png',
-        data: images[name].toString('base64')
-      }
-    });
-    parts.push({ text: `[Image filename: ${name}]` });
-    imageCount++;
-  }
-
-  parts.push({ text: `Deck name: ${deckName}\n\nLecture content:\n\n${text}` });
+  // Text only — images are handled separately by the occlusion pipeline
+  const parts = [
+    { text: `Deck name: ${deckName}\n\nLecture content:\n\n${text}` }
+  ];
 
   try {
     const response = await ai.models.generateContent({
