@@ -194,16 +194,13 @@ export default function App() {
       </nav>
 
       <section className="hero">
-        <div className="hero-label">Flashcard Generator</div>
         <h1>Turn your lectures into<br/><span className="icy">Anki flashcards</span></h1>
         <p className="hero-sub">Upload a PDF or PPTX and get a complete Anki deck in under a minute.</p>
 
         <div className="deck-card" style={{ maxWidth: step === 'imagePicker' ? '800px' : '520px', transition: 'max-width 0.3s' }}>
-          <AnimatePresence mode="wait">
-            
             {/* ── UPLOAD FORM ── */}
             {step === 'upload' && (
-              <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div key="upload" className="fade-in">
                 <div className="deck-card-title">Create your deck</div>
                 <div className="deck-card-sub">Upload your lecture and we'll do the rest</div>
 
@@ -288,12 +285,12 @@ export default function App() {
                   <div className="trust-item"><Zap size={12} /> Under 60s</div>
                   <div className="trust-item"><Download size={12} /> .apkg download</div>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {/* ── IMAGE PICKER ── */}
             {step === 'imagePicker' && (
-              <motion.div key="imagePicker" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <div key="imagePicker" className="fade-in">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <div className="deck-card-title">Select Images</div>
@@ -356,23 +353,23 @@ export default function App() {
                     Skip Images & Generate Deck
                   </button>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {/* ── GENERATING ── */}
             {step === 'generating' && (
-              <motion.div key="generating" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-8">
+              <div key="generating" className="text-center py-8 fade-in">
                 <Loader2 className="animate-spin mx-auto mb-6 text-[#7dd3fc]" size={48} />
                 <h2 className="text-xl font-bold mb-2 text-[#eef6ff]">
                   {status === 'generating' ? 'Generating flashcards...' : 'Building .apkg file...'}
                 </h2>
                 <p className="text-[#8899aa]">This usually takes under 60 seconds.</p>
-              </motion.div>
+              </div>
             )}
 
             {/* ── COMPLETE ── */}
             {step === 'complete' && (
-              <motion.div key="complete" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center py-4">
+              <div key="complete" className="text-center py-4 fade-in">
                 <div className="w-16 h-16 bg-[rgba(125,211,252,0.1)] text-[#7dd3fc] rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(125,211,252,0.15)]">
                   <CheckCircle size={32} />
                 </div>
@@ -393,10 +390,9 @@ export default function App() {
                     Create Another Deck
                   </button>
                 </div>
-              </motion.div>
+              </div>
             )}
 
-          </AnimatePresence>
         </div>
       </section>
 

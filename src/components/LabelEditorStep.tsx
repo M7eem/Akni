@@ -29,7 +29,13 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
   const [allLabels, setAllLabels] = useState<Record<string, Label[]>>(() => {
     const initial: Record<string, Label[]> = {};
     images.forEach(img => {
-      initial[img.name] = img.initialLabels;
+      initial[img.name] = img.initialLabels.map(l => {
+        const newX = Math.max(0, l.x - 0.008);
+        const newY = Math.max(0, l.y - 0.008);
+        const newW = Math.min(1 - newX, l.w + 0.016);
+        const newH = Math.min(1 - newY, l.h + 0.016);
+        return { ...l, x: newX, y: newY, w: newW, h: newH };
+      });
     });
     return initial;
   });
@@ -49,7 +55,14 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
   const [historyMap, setHistoryMap] = useState<Record<string, Label[][]>>(() => {
     const initial: Record<string, Label[][]> = {};
     images.forEach(img => {
-      initial[img.name] = [img.initialLabels];
+      const paddedLabels = img.initialLabels.map(l => {
+        const newX = Math.max(0, l.x - 0.008);
+        const newY = Math.max(0, l.y - 0.008);
+        const newW = Math.min(1 - newX, l.w + 0.016);
+        const newH = Math.min(1 - newY, l.h + 0.016);
+        return { ...l, x: newX, y: newY, w: newW, h: newH };
+      });
+      initial[img.name] = [paddedLabels];
     });
     return initial;
   });
@@ -210,7 +223,7 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
         </button>
         <h2 className="text-2xl font-bold text-[#eef6ff]">Edit Occlusion Labels</h2>
         <p className="text-[#8899aa] mt-1 text-sm">
-          AI detected <b>{labels.length}</b> label{labels.length !== 1 ? 's' : ''}. Drag to reposition, resize handles to adjust, double-click to rename, Delete key to remove.
+          <b>{labels.length}</b> label{labels.length !== 1 ? 's' : ''} detected. Drag to reposition, resize handles to adjust, double-click to rename, Delete key to remove.
         </p>
       </div>
 
