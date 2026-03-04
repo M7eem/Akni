@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
 
@@ -41,32 +42,28 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
   const images: Record<string, Buffer> = {};
   const baseFilename = filename.replace(/\.[^.]+$/, '').replace(/\s+/g, '_');
 
-  // --- Extract ALL images from ppt/media/ ---
-  // FIX: iterate zip.files directly and filter by path prefix
+  // Extract all images from ppt/media/
   for (const [filePath, zipEntry] of Object.entries(zip.files)) {
     if (zipEntry.dir) continue;
-
-    const isInMedia = filePath.startsWith('ppt/media/');
-    if (!isInMedia) continue;
+    if (!filePath.startsWith('ppt/media/')) continue;
 
     const ext = filePath.split('.').pop()?.toLowerCase() || '';
     if (!IMAGE_EXTENSIONS.includes(ext)) continue;
 
-    const imageName = path.basename(filePath); // e.g. image1.png
+    const imageName = path.basename(filePath);
     const uniqueName = `${baseFilename}_${imageName}`;
 
     try {
       const content = await zipEntry.async('nodebuffer');
       if (content && content.length > 0) {
-        images[uniqueName] = content;
-        console.log(`Extracted image: ${uniqueName} (${content.length} bytes)`);
+        images[uniqueName] = content; // PPTX images are already encoded (PNG/JPEG)
       }
     } catch (err) {
       console.warn(`Failed to extract image ${filePath}:`, err);
     }
   }
 
-  // --- Extract text from slides ---
+  // Extract text from slides
   const slideFiles = Object.keys(zip.files).filter(f =>
     f.match(/^ppt\/slides\/slide\d+\.xml$/)
   );
@@ -84,7 +81,6 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
     const slideNum = slideFile.match(/slide(\d+)\.xml/)?.[1];
     let slideContent = `[SLIDE ${slideNum}]\n`;
 
-    // Extract text using regex — more reliable than XML parsing for nested runs
     const textMatches = slideXml.match(/<a:t[^>]*>([^<]+)<\/a:t>/g) || [];
     const slideText = textMatches
       .map(m => m.replace(/<[^>]+>/g, '').trim())
@@ -92,7 +88,6 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
       .join('\n');
     slideContent += slideText;
 
-    // Parse rels to find which images are on this slide
     const relsFile = `ppt/slides/_rels/${slideFile.split('/').pop()}.rels`;
     const relsXml = await zip.file(relsFile)?.async('string');
     if (relsXml) {
@@ -137,16 +132,14 @@ async function extractPdf(buffer: Buffer, filename: string): Promise<{ text: str
     const pageText = content.items.map((item: any) => item.str).join(' ');
     fullText += `\n[PAGE ${i}]\n${pageText}`;
 
-    // Extract images from PDF page using operatorList
+    // Extract images
     try {
       const ops = await page.getOperatorList();
       const imgNames = new Set<string>();
 
       for (let j = 0; j < ops.fnArray.length; j++) {
-        // OPS.paintImageXObject = 85
-        if (ops.fnArray[j] === 85) {
-          const imgName = ops.argsArray[j][0];
-          imgNames.add(imgName);
+        if (ops.fnArray[j] === 85) { // OPS.paintImageXObject
+          imgNames.add(ops.argsArray[j][0]);
         }
       }
 
@@ -154,18 +147,28 @@ async function extractPdf(buffer: Buffer, filename: string): Promise<{ text: str
         try {
           const img = await (page as any).objs.get(imgName);
           if (img && img.data && img.width && img.height) {
-            // Convert raw RGBA to PNG using a simple approach
-            const rgba = img.data;
             const w = img.width;
             const h = img.height;
+            const rawData = img.data as Uint8Array;
 
-            // Create a minimal PNG buffer from raw RGBA
-            // We'll store as raw data and let sharp handle it on the backend
-            const uniqueName = `${baseFilename}_page${i}_${imgName}.png`;
-            images[uniqueName] = Buffer.from(rgba);
+            // PDF.js gives raw RGBA — convert to real PNG using sharp
+            // Skip tiny images (icons, decorations) under 100x100
+            if (w < 100 || h < 100) continue;
+
+            const pngBuffer = await sharp(Buffer.from(rawData), {
+              raw: { width: w, height: h, channels: 4 }
+            })
+              .png()
+              .toBuffer();
+
+            const uniqueName = `${baseFilename}_page${i}_img_${imgName}.png`;
+            images[uniqueName] = pngBuffer;
             fullText += `\n[IMAGE: ${uniqueName}]`;
+            console.log(`Encoded image: ${uniqueName} (${w}x${h} → ${pngBuffer.length} bytes)`);
           }
-        } catch {}
+        } catch (imgErr) {
+          console.warn(`Failed to encode image ${imgName} on page ${i}:`, imgErr);
+        }
       }
     } catch {}
   }
