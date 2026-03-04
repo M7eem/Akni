@@ -42,73 +42,48 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
   const images: Record<string, Buffer> = {};
   const baseFilename = filename.replace(/\.[^.]+$/, '').replace(/\s+/g, '_');
 
-  // Extract all images from ppt/media/
   for (const [filePath, zipEntry] of Object.entries(zip.files)) {
     if (zipEntry.dir) continue;
     if (!filePath.startsWith('ppt/media/')) continue;
-
     const ext = filePath.split('.').pop()?.toLowerCase() || '';
     if (!IMAGE_EXTENSIONS.includes(ext)) continue;
-
-    const imageName = path.basename(filePath);
-    const uniqueName = `${baseFilename}_${imageName}`;
-
+    const uniqueName = `${baseFilename}_${path.basename(filePath)}`;
     try {
       const content = await zipEntry.async('nodebuffer');
-      if (content && content.length > 0) {
-        images[uniqueName] = content; // PPTX images are already encoded (PNG/JPEG)
-      }
+      if (content && content.length > 0) images[uniqueName] = content;
     } catch (err) {
-      console.warn(`Failed to extract image ${filePath}:`, err);
+      console.warn(`Failed to extract PPTX image ${filePath}:`, err);
     }
   }
 
-  // Extract text from slides
-  const slideFiles = Object.keys(zip.files).filter(f =>
-    f.match(/^ppt\/slides\/slide\d+\.xml$/)
-  );
-
-  slideFiles.sort((a, b) => {
-    const numA = parseInt(a.match(/slide(\d+)\.xml/)?.[1] || '0');
-    const numB = parseInt(b.match(/slide(\d+)\.xml/)?.[1] || '0');
-    return numA - numB;
-  });
+  const slideFiles = Object.keys(zip.files)
+    .filter(f => f.match(/^ppt\/slides\/slide\d+\.xml$/))
+    .sort((a, b) => {
+      const n = (s: string) => parseInt(s.match(/slide(\d+)\.xml/)?.[1] || '0');
+      return n(a) - n(b);
+    });
 
   for (const slideFile of slideFiles) {
     const slideXml = await zip.file(slideFile)?.async('string');
     if (!slideXml) continue;
-
     const slideNum = slideFile.match(/slide(\d+)\.xml/)?.[1];
     let slideContent = `[SLIDE ${slideNum}]\n`;
-
     const textMatches = slideXml.match(/<a:t[^>]*>([^<]+)<\/a:t>/g) || [];
-    const slideText = textMatches
-      .map(m => m.replace(/<[^>]+>/g, '').trim())
-      .filter(t => t.length > 0)
-      .join('\n');
-    slideContent += slideText;
+    slideContent += textMatches.map(m => m.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join('\n');
 
     const relsFile = `ppt/slides/_rels/${slideFile.split('/').pop()}.rels`;
     const relsXml = await zip.file(relsFile)?.async('string');
     if (relsXml) {
-      const relsObj = parser.parse(relsXml);
-      const rels = relsObj?.Relationships?.Relationship;
+      const rels = parser.parse(relsXml)?.Relationships?.Relationship;
       if (rels) {
-        const relArray = Array.isArray(rels) ? rels : [rels];
-        for (const rel of relArray) {
-          const type = rel['@_Type'] || '';
-          const target = rel['@_Target'] || '';
-          if (type.includes('image')) {
-            const imageName = path.basename(target);
-            const uniqueName = `${baseFilename}_${imageName}`;
-            if (images[uniqueName]) {
-              slideContent += `\n[IMAGE: ${uniqueName}]`;
-            }
+        for (const rel of (Array.isArray(rels) ? rels : [rels])) {
+          if ((rel['@_Type'] || '').includes('image')) {
+            const uniqueName = `${baseFilename}_${path.basename(rel['@_Target'] || '')}`;
+            if (images[uniqueName]) slideContent += `\n[IMAGE: ${uniqueName}]`;
           }
         }
       }
     }
-
     slidesText.push(slideContent);
   }
 
@@ -116,12 +91,32 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
   return { text: slidesText.join('\n\n---\n\n'), images };
 }
 
+/** Resolve a PDF.js object — handles both already-resolved and pending objects */
+function resolvePdfObj(objs: any, name: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    try {
+      // Try synchronous get first (already resolved)
+      const obj = objs.get(name);
+      resolve(obj);
+    } catch {
+      // Not resolved yet — use callback form
+      try {
+        objs.get(name, (obj: any) => {
+          if (obj) resolve(obj);
+          else reject(new Error(`Object ${name} resolved to null`));
+        });
+      } catch (err) {
+        reject(err);
+      }
+    }
+  });
+}
+
 async function extractPdf(buffer: Buffer, filename: string): Promise<{ text: string; images: Record<string, Buffer> }> {
   const baseFilename = filename.replace(/\.[^.]+$/, '').replace(/\s+/g, '_');
   const images: Record<string, Buffer> = {};
 
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-  const pdf = await loadingTask.promise;
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
   let fullText = '';
 
   for (let i = 1; i <= pdf.numPages; i++) {
@@ -129,45 +124,54 @@ async function extractPdf(buffer: Buffer, filename: string): Promise<{ text: str
 
     // Extract text
     const content = await page.getTextContent();
-    const pageText = content.items.map((item: any) => item.str).join(' ');
-    fullText += `\n[PAGE ${i}]\n${pageText}`;
+    fullText += `\n[PAGE ${i}]\n${content.items.map((item: any) => item.str).join(' ')}`;
 
     // Extract images
     try {
       const ops = await page.getOperatorList();
       const imgNames = new Set<string>();
-
       for (let j = 0; j < ops.fnArray.length; j++) {
-        if (ops.fnArray[j] === 85) { // OPS.paintImageXObject
-          imgNames.add(ops.argsArray[j][0]);
-        }
+        if (ops.fnArray[j] === 85) imgNames.add(ops.argsArray[j][0]); // paintImageXObject
       }
 
       for (const imgName of imgNames) {
         try {
-          const img = await (page as any).objs.get(imgName);
-          if (img && img.data && img.width && img.height) {
-            const w = img.width;
-            const h = img.height;
-            const rawData = img.data as Uint8Array;
+          const img = await resolvePdfObj((page as any).objs, imgName);
 
-            // PDF.js gives raw RGBA — convert to real PNG using sharp
-            // Skip tiny images (icons, decorations) under 100x100
-            if (w < 100 || h < 100) continue;
+          if (!img || !img.data || !img.width || !img.height) continue;
 
-            const pngBuffer = await sharp(Buffer.from(rawData), {
-              raw: { width: w, height: h, channels: 4 }
-            })
-              .png()
-              .toBuffer();
+          const w = img.width;
+          const h = img.height;
+          if (w < 100 || h < 100) continue; // skip tiny decorative images
 
-            const uniqueName = `${baseFilename}_page${i}_img_${imgName}.png`;
-            images[uniqueName] = pngBuffer;
-            fullText += `\n[IMAGE: ${uniqueName}]`;
-            console.log(`Encoded image: ${uniqueName} (${w}x${h} → ${pngBuffer.length} bytes)`);
+          const rawData = Buffer.from(img.data as Uint8Array);
+          const expectedBytes4ch = w * h * 4;
+          const expectedBytes3ch = w * h * 3;
+
+          // Auto-detect channels from actual data length
+          let channels: 3 | 4;
+          if (rawData.length === expectedBytes4ch) {
+            channels = 4;
+          } else if (rawData.length === expectedBytes3ch) {
+            channels = 3;
+          } else {
+            // Data length doesn't match either — try to infer closest
+            const ratio = rawData.length / (w * h);
+            channels = ratio > 3.5 ? 4 : 3;
+            console.warn(`Image ${imgName} (${w}x${h}): unexpected size ${rawData.length}, expected ${expectedBytes4ch} or ${expectedBytes3ch}, guessing ${channels}ch`);
           }
+
+          const pngBuffer = await sharp(rawData, {
+            raw: { width: w, height: h, channels }
+          }).png().toBuffer();
+
+          const uniqueName = `${baseFilename}_page${i}_img_${imgName}.png`;
+          images[uniqueName] = pngBuffer;
+          fullText += `\n[IMAGE: ${uniqueName}]`;
+          console.log(`Encoded: ${uniqueName} (${w}x${h} ${channels}ch → ${pngBuffer.length} bytes)`);
+
         } catch (imgErr) {
-          console.warn(`Failed to encode image ${imgName} on page ${i}:`, imgErr);
+          console.warn(`Failed to encode image ${imgName} on page ${i}:`, (imgErr as Error).message);
         }
       }
     } catch {}
