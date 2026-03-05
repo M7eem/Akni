@@ -195,7 +195,7 @@ app.post('/api/generate', upload.none(), async (req, res) => {
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir);
 
     const timestamp = Date.now();
-    const outputFilename = `${deck_name.replace(/[^a-z0-9]/gi, '_')}_${timestamp}.apkg`;
+    const outputFilename = `${deck_name.replace(/[^a-z0-9]/gi, '_')}.apkg`;
     const outputPath = path.join(outputDir, outputFilename);
 
     await createAnkiPackage(cards, outputPath, deck_name, extractionResult.images, cardTypes, occlusionCards);
