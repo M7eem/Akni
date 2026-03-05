@@ -21,7 +21,7 @@ async function generateWithClient(
   deckName: string,
   cardTypes: string[]
 ) {
-  const modelPass1 = 'gemini-3.1-flash-preview'; // Flash — bulk generation, cost efficient
+  const modelPass1 = 'gemini-3-flash-preview'; // Flash — bulk generation, cost efficient
   const modelPass2 = 'gemini-3.1-pro-preview';   // Pro — gap audit, nuanced reasoning
 
   // ─────────────────────────────────────────────
