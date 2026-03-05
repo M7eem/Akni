@@ -150,7 +150,8 @@ export default function App() {
       setDownloadUrl(url);
 
       const cd = response.headers.get('Content-Disposition');
-      let name = `${deckName.replace(/[^a-z0-9]/gi, '_')}.apkg`;
+      const safeName = deckName.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'My Deck';
+      let name = `${safeName}.apkg`;
       if (cd) {
         const match = cd.match(/filename="?([^"]+)"?/);
         if (match?.[1]) name = match[1];
@@ -237,7 +238,7 @@ export default function App() {
                   <span className="field-label">Deck Name</span>
                   <input 
                     type="text" 
-                    placeholder="e.g. Basal Ganglia, Week 4" 
+                    placeholder="e.g. Cardiology, Week 3" 
                     value={deckName}
                     onChange={e => setDeckName(e.target.value)}
                   />

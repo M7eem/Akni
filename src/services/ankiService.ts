@@ -117,7 +117,7 @@ basic_model = {
     "sortf": 0, "did": deck_id,
     "tmpls": [{"name": "Card 1", "ord": 0,
                "qfmt": "{{Front}}",
-               "afmt": "{{FrontSide}}<hr id=answer>{{Back}}",
+               "afmt": "{{Front}}<hr id=answer>{{Back}}",
                "bqfmt": "", "bafmt": "", "did": None, "bfont": "", "bsize": 0}],
     "flds": [
         {"name": "Front", "ord": 0, "sticky": False, "rtl": False, "font": "Arial", "size": 20},
