@@ -21,7 +21,8 @@ async function generateWithClient(
   deckName: string,
   cardTypes: string[]
 ) {
-  const model = 'gemini-3.1-pro-preview';
+  const modelPass1 = 'gemini-3.1-flash-preview'; // Flash — bulk generation, cost efficient
+  const modelPass2 = 'gemini-3.1-pro-preview';   // Pro — gap audit, nuanced reasoning
 
   // ─────────────────────────────────────────────
   // PASS 1 PROMPT — full generation
@@ -365,7 +366,7 @@ Return a JSON array only. No preamble, no explanation, no markdown fences.
 
   try {
     const pass1Response = await ai.models.generateContent({
-      model,
+      model: modelPass1,
       contents: { role: 'user', parts: [{ text: sourceText }] },
       config: {
         systemInstruction: pass1Prompt,
@@ -414,7 +415,7 @@ Now identify any concepts, facts, values, or clinical points from the source tha
 `;
 
     const pass2Response = await ai.models.generateContent({
-      model,
+      model: modelPass2,
       contents: { role: 'user', parts: [{ text: pass2UserContent }] },
       config: {
         systemInstruction: pass2Prompt,
