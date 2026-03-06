@@ -1,6 +1,5 @@
 import { cert, initializeApp, getApp, App } from 'firebase-admin/app';
 import { getAuth, DecodedIdToken } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
 import { Request, Response, NextFunction } from 'express';
 
 let firebaseApp: App | null = null;
@@ -12,25 +11,17 @@ function getFirebaseAdmin(): App {
     const privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
     if (!projectId || !clientEmail || !privateKey) {
-      console.error('Missing Firebase env vars:', {
-        hasProjectId: !!projectId,
-        hasClientEmail: !!clientEmail,
-        hasPrivateKey: !!privateKey,
-      });
       throw new Error('Firebase Admin environment variables are missing');
     }
 
-    // Robustly handle private key formatting
     let formattedKey = privateKey;
-    formattedKey = formattedKey.replace(/^["']|["']$/g, ''); // strip surrounding quotes
+    formattedKey = formattedKey.replace(/^["']|["']$/g, '');
     if (!formattedKey.includes('\n')) {
-      formattedKey = formattedKey.replace(/\\n/g, '\n'); // replace escaped newlines
+      formattedKey = formattedKey.replace(/\\n/g, '\n');
     }
 
-    console.log('Firebase Admin init — key preview:', formattedKey.substring(0, 27) + '...');
-
     try {
-      firebaseApp = getApp(); // reuse if already initialized
+      firebaseApp = getApp();
     } catch {
       firebaseApp = initializeApp({
         credential: cert({ projectId, clientEmail, privateKey: formattedKey }),
@@ -40,6 +31,14 @@ function getFirebaseAdmin(): App {
     console.log('Firebase Admin initialized successfully');
   }
   return firebaseApp;
+}
+
+// ── Admin check via env variable ──────────────────────────────
+// In Railway, add: ADMIN_UIDS=uid1,uid2,uid3
+function isAdminUid(uid: string): boolean {
+  const adminUids = process.env.ADMIN_UIDS ?? '';
+  if (!adminUids) return false;
+  return adminUids.split(',').map(u => u.trim()).includes(uid);
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -57,22 +56,8 @@ async function verifyTokenAndSetUser(req: AuthenticatedRequest): Promise<boolean
     const app = getFirebaseAdmin();
     const decodedToken = await getAuth(app).verifyIdToken(token);
     req.user = decodedToken;
-
-    // Check isAdmin in Firestore
-    try {
-      const profileDoc = await getFirestore(app)
-        .collection('users')
-        .doc(decodedToken.uid)
-        .collection('profile')
-        .doc('data')
-        .get();
-      req.isAdmin = profileDoc.exists && profileDoc.data()?.isAdmin === true;
-      console.log(`User ${decodedToken.uid} — isAdmin: ${req.isAdmin}`);
-    } catch (firestoreError) {
-      console.error('Firestore isAdmin check failed:', firestoreError);
-      req.isAdmin = false;
-    }
-
+    req.isAdmin = isAdminUid(decodedToken.uid);
+    console.log(`User ${decodedToken.uid} — isAdmin: ${req.isAdmin}`);
     return true;
   } catch (error: any) {
     console.error('Token verification failed:', error.code, error.message);
@@ -80,7 +65,6 @@ async function verifyTokenAndSetUser(req: AuthenticatedRequest): Promise<boolean
   }
 }
 
-// Use on routes where auth is optional (guest + logged-in both allowed)
 export const optionalAuth = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -90,22 +74,18 @@ export const optionalAuth = async (
   next();
 };
 
-// Use on routes that require a valid token
 export const requireAuth = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
   const authHeader = req.headers.authorization;
-
   if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: Missing token' });
   }
-
   const verified = await verifyTokenAndSetUser(req);
   if (!verified) {
     return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
   }
-
   next();
 };
