@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  signInWithPopup,
+  signInWithRedirect,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
@@ -35,11 +35,9 @@ export default function AuthPage() {
     setError("");
     setLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
-      navigate("/");
+      await signInWithRedirect(auth, googleProvider);
     } catch (e: any) {
       setError(friendlyError(e.code));
-    } finally {
       setLoading(false);
     }
   };
