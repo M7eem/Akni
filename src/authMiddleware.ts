@@ -1,9 +1,11 @@
-import * as admin from 'firebase-admin';
+import { cert, initializeApp, getApp, App } from 'firebase-admin/app';
+import { getAuth, DecodedIdToken } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 import { Request, Response, NextFunction } from 'express';
 
-let firebaseApp: admin.app.App | null = null;
+let firebaseApp: App | null = null;
 
-function getFirebaseAdmin() {
+function getFirebaseAdmin(): App {
   if (!firebaseApp) {
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -19,26 +21,21 @@ function getFirebaseAdmin() {
     }
 
     // Robustly handle private key formatting
-    // Railway and other platforms encode newlines differently
     let formattedKey = privateKey;
-
-    // Strip surrounding quotes if present
-    formattedKey = formattedKey.replace(/^["']|["']$/g, '');
-
-    // If the key doesn't have real newlines, replace escaped \n
+    formattedKey = formattedKey.replace(/^["']|["']$/g, ''); // strip surrounding quotes
     if (!formattedKey.includes('\n')) {
-      formattedKey = formattedKey.replace(/\\n/g, '\n');
+      formattedKey = formattedKey.replace(/\\n/g, '\n'); // replace escaped newlines
     }
 
     console.log('Firebase Admin init — key preview:', formattedKey.substring(0, 27) + '...');
 
-    firebaseApp = admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey: formattedKey,
-      }),
-    });
+    try {
+      firebaseApp = getApp(); // reuse if already initialized
+    } catch {
+      firebaseApp = initializeApp({
+        credential: cert({ projectId, clientEmail, privateKey: formattedKey }),
+      });
+    }
 
     console.log('Firebase Admin initialized successfully');
   }
@@ -46,7 +43,7 @@ function getFirebaseAdmin() {
 }
 
 export interface AuthenticatedRequest extends Request {
-  user?: admin.auth.DecodedIdToken;
+  user?: DecodedIdToken;
   isAdmin?: boolean;
 }
 
@@ -58,13 +55,12 @@ async function verifyTokenAndSetUser(req: AuthenticatedRequest): Promise<boolean
 
   try {
     const app = getFirebaseAdmin();
-    const decodedToken = await app.auth().verifyIdToken(token);
+    const decodedToken = await getAuth(app).verifyIdToken(token);
     req.user = decodedToken;
 
     // Check isAdmin in Firestore
     try {
-      const profileDoc = await app
-        .firestore()
+      const profileDoc = await getFirestore(app)
         .collection('users')
         .doc(decodedToken.uid)
         .collection('profile')
