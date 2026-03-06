@@ -1,9 +1,11 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User as UserIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function AuthButton() {
-  const { user, signInWithGoogle, signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   if (user) {
     return (
@@ -33,7 +35,7 @@ export default function AuthButton() {
 
   return (
     <button
-      onClick={signInWithGoogle}
+      onClick={() => navigate('/auth')}
       className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-[#07090f] bg-[#7dd3fc] rounded-full hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(125,211,252,0.2)]"
     >
       <svg className="w-4 h-4" viewBox="0 0 24 24">

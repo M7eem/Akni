@@ -30,6 +30,7 @@
     "pdfjs-dist": "^5.5.207",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router-dom": "^7.13.1",
     "sharp": "^0.34.5",
     "sql.js": "^1.14.0",
     "uuid": "^13.0.0",
