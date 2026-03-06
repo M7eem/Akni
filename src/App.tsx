@@ -1,7 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon } from 'lucide-react';
+import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import LabelEditorStep, { Label } from './components/LabelEditorStep';
+import AuthButton from './components/AuthButton';
+import DeckHistory from './components/DeckHistory';
+import { useAuth } from './contexts/AuthContext';
+import { saveDeckHistory } from './services/firestoreService';
 
 interface UploadedFile {
   file: File;
@@ -31,6 +35,8 @@ export default function App() {
   const [selectedImageNames, setSelectedImageNames] = useState<string[]>([]);
   const [step, setStep] = useState<Step>('upload');
   const [detectedLabelsMap, setDetectedLabelsMap] = useState<Record<string, Label[]>>({});
+  const [showHistory, setShowHistory] = useState(false);
+  const { user, getIdToken, signInWithGoogle } = useAuth();
 
   // ── File handling ──────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,8 +58,14 @@ export default function App() {
   const removeFile = (id: string) => setFiles(prev => prev.filter(f => f.id !== id));
 
   // ── Safe fetch — never crashes on HTML error responses ─────
-  const safeFetch = async (url: string, options: RequestInit) => {
-    const response = await fetch(url, options);
+  const safeFetch = async (url: string, options: RequestInit = {}) => {
+    const token = await getIdToken();
+    const headers = new Headers(options.headers || {});
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    const response = await fetch(url, { ...options, headers });
     if (!response.ok) {
       const text = await response.text();
       try {
@@ -150,6 +162,9 @@ export default function App() {
       setDownloadUrl(url);
 
       const cd = response.headers.get('Content-Disposition');
+      const cardCountStr = response.headers.get('X-Card-Count');
+      const cardCount = cardCountStr ? parseInt(cardCountStr, 10) : 0;
+
       const safeName = deckName.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'My Deck';
       let name = `${safeName}.apkg`;
       if (cd) {
@@ -157,6 +172,15 @@ export default function App() {
         if (match?.[1]) name = match[1];
       }
       setFileName(name);
+      
+      if (user) {
+        await saveDeckHistory(user.uid, {
+          deckName: safeName,
+          cardCount,
+          fileName: name
+        });
+      }
+
       setStep('complete');
       setStatus('idle');
     } catch (error) {
@@ -188,13 +212,28 @@ export default function App() {
 
       <nav>
         <a href="/" className="logo"><div className="logo-dot"></div>iLoveAnki</a>
-        <div className="nav-links">
+        <div className="nav-links flex items-center gap-6">
           <a href="#how">How it works</a>
           <a href="#features">Features</a>
+          {user && (
+            <button 
+              onClick={() => setShowHistory(!showHistory)} 
+              className={`flex items-center gap-2 text-sm font-medium transition-colors ${showHistory ? 'text-[#7dd3fc]' : 'text-[#8899aa] hover:text-[#eef6ff]'}`}
+            >
+              <History size={16} /> History
+            </button>
+          )}
+          <AuthButton />
         </div>
       </nav>
 
-      <section className="hero">
+      {showHistory ? (
+        <section className="max-w-6xl mx-auto px-6 py-12">
+          <DeckHistory />
+        </section>
+      ) : (
+        <>
+          <section className="hero">
         <h1>Turn your lectures into<br/><span className="icy">Anki flashcards</span></h1>
         <p className="hero-sub">Upload a PDF or PPTX and get a complete Anki deck in under a minute.</p>
 
@@ -271,11 +310,13 @@ export default function App() {
 
                 <button 
                   className="gen-btn"
-                  onClick={handleExtractImages}
-                  disabled={!files.length || !deckName.trim() || !cardTypes.length || status === 'extracting'}
+                  onClick={user ? handleExtractImages : signInWithGoogle}
+                  disabled={status === 'extracting' || (!user ? false : (!files.length || !deckName.trim() || !cardTypes.length))}
                 >
                   {status === 'extracting' ? (
                     <><Loader2 className="animate-spin" size={18} /> Extracting...</>
+                  ) : !user ? (
+                    <>Sign in to Generate <ArrowRight size={18} /></>
                   ) : (
                     <>Generate My Deck <ArrowRight size={18} /></>
                   )}
@@ -487,6 +528,8 @@ export default function App() {
         <a href="/" className="logo" style={{ fontSize: '15px' }}><div className="logo-dot"></div>iLoveAnki</a>
         <p>Made for students who take studying seriously.</p>
       </footer>
+        </>
+      )}
     </>
   );
 }

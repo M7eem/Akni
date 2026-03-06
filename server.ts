@@ -9,6 +9,7 @@ import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
 import { generateOcclusionCards, detectLabelsForImage, generateOcclusionCardsFromLabels } from './src/services/occlusionService';
+import { requireAuth } from './src/authMiddleware';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,7 +65,7 @@ app.get('/api/image/:sessionId/:imageName', (req, res) => {
 });
 
 /** Extract images from uploaded files, store in session, return names only */
-app.post('/api/extract-images', upload.array('files'), async (req, res) => {
+app.post('/api/extract-images', requireAuth, upload.array('files'), async (req, res) => {
   try {
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
@@ -129,7 +130,7 @@ app.post('/api/detect-labels', async (req, res) => {
 });
 
 /** Generate Anki deck from session content */
-app.post('/api/generate', upload.none(), async (req, res) => {
+app.post('/api/generate', requireAuth, upload.none(), async (req, res) => {
   try {
     const { sessionId, deck_name, selected_images, card_types, occlusionData } = req.body;
 
@@ -203,10 +204,13 @@ app.post('/api/generate', upload.none(), async (req, res) => {
     sessionStore.delete(sessionId);
 
     const fileSize = fs.statSync(outputPath).size;
-    console.log(`APKG ready: ${outputFilename} (${fileSize} bytes)`);
+    const totalCards = cards.length + occlusionCards.length;
+    console.log(`APKG ready: ${outputFilename} (${fileSize} bytes, ${totalCards} cards)`);
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${outputFilename}"`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Card-Count');
+    res.setHeader('X-Card-Count', totalCards.toString());
     res.setHeader('Content-Length', fileSize);
 
     const fileStream = fs.createReadStream(outputPath);
