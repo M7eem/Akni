@@ -215,7 +215,7 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="space-y-4"
+      className="space-y-4 max-w-[680px] mx-auto w-full"
     >
       <div>
         <button onClick={onBack} className="text-sm font-medium text-[#8899aa] hover:text-[#eef6ff] mb-2">
@@ -225,34 +225,6 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
         <p className="text-[#8899aa] mt-1 text-sm">
           <b>{labels.length}</b> label{labels.length !== 1 ? 's' : ''} detected. Drag to reposition, resize handles to adjust, double-click to rename, Delete key to remove.
         </p>
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex flex-wrap gap-2 p-2 bg-[#0d1117] rounded-xl border border-[rgba(255,255,255,0.05)] shadow-sm">
-        <button
-          onClick={() => { setAdding(!adding); setSelectedIds(new Set()); }}
-          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
-            ${adding ? 'bg-[rgba(125,211,252,0.1)] text-[#7dd3fc] ring-1 ring-[#7dd3fc]' : 'text-[#eef6ff] hover:bg-[rgba(255,255,255,0.05)]'}`}
-        >
-          <Plus size={16} /> {adding ? 'Click on image to place label' : 'Add Label'}
-        </button>
-        <button
-          onClick={deleteSelected}
-          disabled={selectedIds.size === 0}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#eef6ff] rounded-lg hover:bg-red-900/20 hover:text-red-400 disabled:opacity-40 transition-colors"
-        >
-          <Trash2 size={16} /> Delete ({selectedIds.size})
-        </button>
-        <div className="w-px h-6 bg-[rgba(255,255,255,0.1)] my-auto mx-1" />
-        <button onClick={undo} disabled={historyIndex === 0} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#eef6ff] rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-40 transition-colors">
-          <Undo size={16} /> Undo
-        </button>
-        <button onClick={redo} disabled={historyIndex === history.length - 1} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#eef6ff] rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-40 transition-colors">
-          <Redo size={16} /> Redo
-        </button>
-        <div className="ml-auto text-xs text-[#8899aa] self-center pr-2">
-          {labels.length} card{labels.length !== 1 ? 's' : ''} will be created
-        </div>
       </div>
 
       {/* Image + Labels */}
@@ -266,7 +238,7 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
           <img
             src={currentImage.src}
             alt={currentImage.name}
-            className="max-w-[900px] w-full h-auto block shadow-md rounded"
+            className="max-w-full max-h-[500px] w-auto h-auto block shadow-md rounded"
             draggable={false}
           />
 
@@ -327,6 +299,34 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap gap-2 p-2 bg-[#0d1117] rounded-xl border border-[rgba(255,255,255,0.05)] shadow-sm">
+        <button
+          onClick={() => { setAdding(!adding); setSelectedIds(new Set()); }}
+          className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors
+            ${adding ? 'bg-[rgba(125,211,252,0.1)] text-[#7dd3fc] ring-1 ring-[#7dd3fc]' : 'text-[#eef6ff] hover:bg-[rgba(255,255,255,0.05)]'}`}
+        >
+          <Plus size={16} /> {adding ? 'Click on image to place label' : 'Add Label'}
+        </button>
+        <button
+          onClick={deleteSelected}
+          disabled={selectedIds.size === 0}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#eef6ff] rounded-lg hover:bg-red-900/20 hover:text-red-400 disabled:opacity-40 transition-colors"
+        >
+          <Trash2 size={16} /> Delete ({selectedIds.size})
+        </button>
+        <div className="w-px h-6 bg-[rgba(255,255,255,0.1)] my-auto mx-1" />
+        <button onClick={undo} disabled={historyIndex === 0} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#eef6ff] rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-40 transition-colors">
+          <Undo size={16} /> Undo
+        </button>
+        <button onClick={redo} disabled={historyIndex === history.length - 1} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-[#eef6ff] rounded-lg hover:bg-[rgba(255,255,255,0.05)] disabled:opacity-40 transition-colors">
+          <Redo size={16} /> Redo
+        </button>
+        <div className="ml-auto text-xs text-[#8899aa] self-center pr-2">
+          {labels.length} card{labels.length !== 1 ? 's' : ''} will be created
         </div>
       </div>
 

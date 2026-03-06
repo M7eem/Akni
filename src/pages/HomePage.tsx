@@ -25,6 +25,42 @@ type Status = 'idle' | 'extracting' | 'detecting' | 'generating' | 'building' | 
 
 import { useNavigate } from 'react-router-dom';
 
+const LoadingScreen = () => {
+  const [loadingStep, setLoadingStep] = useState(0);
+  const steps = [
+    'Reading your lecture...',
+    'Identifying key concepts...',
+    'Generating flashcards...',
+    'Almost done...'
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLoadingStep(prev => Math.min(prev + 1, steps.length - 1));
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div key="generating" className="text-center py-12 fade-in">
+      <Loader2 className="animate-spin mx-auto mb-8 text-[var(--accent)]" size={56} />
+      <h2 className="text-2xl font-bold mb-3 text-[#eef6ff] transition-all duration-500">
+        {steps[loadingStep]}
+      </h2>
+      <p className="text-[#8899aa] text-sm">This usually takes under 60 seconds.</p>
+      
+      {/* Progress bar */}
+      <div className="absolute bottom-0 left-0 h-1 bg-[var(--accent)] transition-all duration-[60000ms] ease-linear w-full" style={{ width: '100%', transformOrigin: 'left', animation: 'progress 60s linear forwards' }} />
+      <style>{`
+        @keyframes progress {
+          0% { transform: scaleX(0); }
+          100% { transform: scaleX(1); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 export default function HomePage() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [deckName, setDeckName] = useState('');
@@ -319,11 +355,13 @@ export default function HomePage() {
       ) : (
         <>
           <section className="hero">
-        <h1>Turn your lectures into<br/><span className="icy">Anki flashcards</span></h1>
-        <p className="hero-sub">Upload a PDF or PPTX and get a complete Anki deck in under a minute.</p>
+            {step !== 'labelEditor' && (
+              <>
+                <h1>Turn your lectures into<br/><span className="icy">Anki flashcards</span></h1>
+                <p className="hero-sub">Upload a PDF or PPTX and get a complete Anki deck in under a minute.</p>
 
-        <div className="deck-card" style={{ maxWidth: step === 'imagePicker' ? '800px' : '520px', transition: 'max-width 0.3s' }}>
-            {/* ── UPLOAD FORM ── */}
+                <div className="deck-card">
+                  {/* ── UPLOAD FORM ── */}
             {step === 'upload' && (
               <div key="upload" className="fade-in">
                 <div className="deck-card-title">Create your deck</div>
@@ -437,7 +475,16 @@ export default function HomePage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                <div 
+                  className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 max-h-[420px] overflow-y-auto p-4"
+                  style={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: 'rgba(125,211,252,0.2) transparent',
+                    borderRadius: '24px',
+                    background: 'var(--surface)',
+                    border: '1px solid rgba(125,211,252,0.18)'
+                  }}
+                >
                   {extractedImages.map((img) => {
                     const isSelected = selectedImageNames.includes(img.name);
                     return (
@@ -494,13 +541,7 @@ export default function HomePage() {
 
             {/* ── GENERATING ── */}
             {step === 'generating' && (
-              <div key="generating" className="text-center py-8 fade-in">
-                <Loader2 className="animate-spin mx-auto mb-6 text-[#7dd3fc]" size={48} />
-                <h2 className="text-xl font-bold mb-2 text-[#eef6ff]">
-                  {status === 'generating' ? 'Generating flashcards...' : 'Building .apkg file...'}
-                </h2>
-                <p className="text-[#8899aa]">This usually takes under 60 seconds.</p>
-              </div>
+              <LoadingScreen />
             )}
 
             {/* ── COMPLETE ── */}
@@ -530,20 +571,22 @@ export default function HomePage() {
             )}
 
         </div>
-      </section>
+              </>
+            )}
 
-      {/* Label Editor Overlay */}
-      {step === 'labelEditor' && selectedImageNames.length > 0 && (
-        <LabelEditorStep
-          images={selectedImageNames.map(name => ({
-            name,
-            src: `/api/image/${sessionId}/${encodeURIComponent(name)}`,
-            initialLabels: detectedLabelsMap[name] || []
-          }))}
-          onSave={(allLabels) => { handleGenerate(sessionId, allLabels); }}
-          onBack={() => { setStep('imagePicker'); setStatus('idle'); }}
-        />
-      )}
+            {/* Label Editor Overlay */}
+            {step === 'labelEditor' && selectedImageNames.length > 0 && (
+              <LabelEditorStep
+                images={selectedImageNames.map(name => ({
+                  name,
+                  src: `/api/image/${sessionId}/${encodeURIComponent(name)}`,
+                  initialLabels: detectedLabelsMap[name] || []
+                }))}
+                onSave={(allLabels) => { handleGenerate(sessionId, allLabels); }}
+                onBack={() => { setStep('imagePicker'); setStatus('idle'); }}
+              />
+            )}
+      </section>
 
       <div className="rule"></div>
 

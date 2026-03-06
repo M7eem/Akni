@@ -134,10 +134,11 @@ nav.nav-scrolled {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 100px 24px 80px;
+  padding: 80px 24px 40px;
   position: relative;
   z-index: 1;
   text-align: center;
+  overflow-y: auto;
 }
 .hero-label {
   font-size: 12px;
@@ -171,7 +172,7 @@ h1 {
 /* DECK CARD */
 .deck-card {
   width: 100%;
-  max-width: 520px;
+  max-width: 680px;
   background: var(--surface);
   border: 1px solid rgba(125, 211, 252, 0.18);
   border-radius: 24px;
@@ -180,6 +181,8 @@ h1 {
   opacity: 0;
   animation: up 0.7s 0.3s forwards;
   text-align: left;
+  position: relative;
+  overflow: hidden;
 }
 .deck-card-title {
   font-size: 20px;
@@ -324,6 +327,7 @@ h1 {
 /* card types */
 .types {
   display: flex;
+  justify-content: center;
   gap: 7px;
   flex-wrap: wrap;
   margin-bottom: 22px;
