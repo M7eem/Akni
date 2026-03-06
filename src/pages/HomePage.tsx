@@ -7,7 +7,7 @@ import DeckHistory from '../components/DeckHistory';
 import { useAuth } from '../contexts/AuthContext';
 import { saveDeckHistory } from '../services/firestoreService';
 import { getUsage } from '../services/deckHistoryService';
-import { signInWithPopup, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithRedirect, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 
 interface UploadedFile {
@@ -722,7 +722,7 @@ export default function HomePage() {
               <button 
                 onClick={async () => {
                   try {
-                    await signInWithPopup(auth, googleProvider);
+                    await signInWithRedirect(auth, googleProvider);
                     setShowSignUpModal(false);
                   } catch (err: any) {
                     setAuthError(err.message);

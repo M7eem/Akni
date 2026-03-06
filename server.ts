@@ -68,7 +68,11 @@ app.get('/api/image/:sessionId/:imageName', (req, res) => {
 /** Extract images from uploaded files, store in session, return names only */
 app.post('/api/extract-images', optionalAuth, upload.array('files'), async (req: AuthenticatedRequest, res) => {
   try {
-    if (req.user) {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
+      }
       if (!req.isAdmin) {
         try {
           await checkUsage(req.user.uid);
@@ -111,7 +115,11 @@ app.post('/api/extract-images', optionalAuth, upload.array('files'), async (req:
 /** Detect labels for an image already in session — no base64 over the wire */
 app.post('/api/detect-labels', optionalAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    if (req.user) {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
+      }
       if (!req.isAdmin) {
         try {
           await checkUsage(req.user.uid);
@@ -167,9 +175,11 @@ app.post('/api/detect-labels', optionalAuth, async (req: AuthenticatedRequest, r
 /** Generate Anki deck from session content */
 app.post('/api/generate', optionalAuth, upload.none(), async (req: AuthenticatedRequest, res) => {
   try {
-    const { sessionId, deck_name, selected_images, card_types, occlusionData } = req.body;
-
-    if (req.user) {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      if (!req.user) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
+      }
       if (!req.isAdmin) {
         try {
           await checkAndIncrementUsage(req.user.uid);
@@ -185,6 +195,8 @@ app.post('/api/generate', optionalAuth, upload.none(), async (req: Authenticated
         return res.status(401).json({ error: 'Unauthorized: Guest trial already used or missing header' });
       }
     }
+
+    const { sessionId, deck_name, selected_images, card_types, occlusionData } = req.body;
 
     if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
     if (!deck_name) return res.status(400).json({ error: 'deck_name is required' });
