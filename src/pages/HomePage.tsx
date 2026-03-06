@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import LabelEditorStep, { Label } from '../components/LabelEditorStep';
@@ -38,8 +38,17 @@ export default function HomePage() {
   const [step, setStep] = useState<Step>('upload');
   const [detectedLabelsMap, setDetectedLabelsMap] = useState<Record<string, Label[]>>({});
   const [showHistory, setShowHistory] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const { user, getIdToken } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // ── File handling ──────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -213,8 +222,18 @@ export default function HomePage() {
       <div className="orb orb1"></div>
       <div className="orb orb2"></div>
 
-      <nav>
-        <a href="/" className="logo"><div className="logo-dot"></div>iLoveAnki</a>
+      <nav className={scrolled ? 'nav-scrolled' : ''}>
+        <a href="/" className="logo" style={{ textDecoration: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', fontSize: '18px', fontWeight: 800, letterSpacing: '-0.5px', color: '#eef6ff' }}>
+            <div style={{ position: 'relative', width: '26px', height: '20px', flexShrink: 0 }}>
+              <div style={{ position: 'absolute', width: '20px', height: '14px', background: 'rgba(125,211,252,0.2)', border: '1px solid rgba(125,211,252,0.4)', borderRadius: '4px', top: 0, left: '6px' }} />
+              <div style={{ position: 'absolute', width: '20px', height: '14px', background: '#131820', border: '1px solid rgba(125,211,252,0.6)', borderRadius: '4px', bottom: 0, left: 0 }}>
+                <div style={{ position: 'absolute', top: '4px', left: '4px', right: '4px', height: '2px', borderRadius: '1px', background: 'rgba(125,211,252,0.5)' }} />
+              </div>
+            </div>
+            Card it
+          </div>
+        </a>
         <div className="nav-links flex items-center gap-6">
           <a href="#how">How it works</a>
           <a href="#features">Features</a>
@@ -225,6 +244,11 @@ export default function HomePage() {
             >
               <History size={16} /> History
             </button>
+          )}
+          {!user && (
+            <a href="/auth" className="text-[13px] font-medium text-[#8899aa] hover:text-[#eef6ff] transition-colors">
+              Log in
+            </a>
           )}
           <AuthButton />
         </div>
@@ -528,7 +552,17 @@ export default function HomePage() {
       </section>
 
       <footer>
-        <a href="/" className="logo" style={{ fontSize: '15px' }}><div className="logo-dot"></div>iLoveAnki</a>
+        <a href="/" className="logo" style={{ fontSize: '15px', textDecoration: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontWeight: 800, letterSpacing: '-0.5px', color: '#eef6ff' }}>
+            <div style={{ position: 'relative', width: '22px', height: '16px', flexShrink: 0 }}>
+              <div style={{ position: 'absolute', width: '16px', height: '11px', background: 'rgba(125,211,252,0.2)', border: '1px solid rgba(125,211,252,0.4)', borderRadius: '3px', top: 0, left: '5px' }} />
+              <div style={{ position: 'absolute', width: '16px', height: '11px', background: '#131820', border: '1px solid rgba(125,211,252,0.6)', borderRadius: '3px', bottom: 0, left: 0 }}>
+                <div style={{ position: 'absolute', top: '3px', left: '3px', right: '3px', height: '2px', borderRadius: '1px', background: 'rgba(125,211,252,0.5)' }} />
+              </div>
+            </div>
+            Card it
+          </div>
+        </a>
         <p>Made for students who take studying seriously.</p>
       </footer>
         </>

@@ -1,5 +1,6 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
+import './lib/firebase';
 import App from './App.tsx';
 import './index.css';
 import { AuthProvider } from './contexts/AuthContext.tsx';

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
+import { User, signInWithPopup, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 
 interface AuthContextType {
@@ -17,6 +17,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setPersistence(auth, browserLocalPersistence).catch((error) => {
+      console.error("Error setting persistence:", error);
+    });
+
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user);
       setLoading(false);
@@ -46,6 +50,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
     return null;
   };
+
+  if (loading) return <div style={{ minHeight: '100vh', background: '#07090f' }} />;
 
   return (
     <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut, getIdToken }}>
