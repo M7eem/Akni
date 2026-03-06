@@ -69,13 +69,15 @@ app.get('/api/image/:sessionId/:imageName', (req, res) => {
 app.post('/api/extract-images', optionalAuth, upload.array('files'), async (req: AuthenticatedRequest, res) => {
   try {
     if (req.user) {
-      try {
-        await checkUsage(req.user.uid);
-      } catch (error: any) {
-        if (error.message === 'LIMIT_REACHED') {
-          return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
+      if (!req.isAdmin) {
+        try {
+          await checkUsage(req.user.uid);
+        } catch (error: any) {
+          if (error.message === 'LIMIT_REACHED') {
+            return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
+          }
+          throw error;
         }
-        throw error;
       }
     } else {
       if (req.headers['x-guest-trial'] !== 'true') {
@@ -110,13 +112,15 @@ app.post('/api/extract-images', optionalAuth, upload.array('files'), async (req:
 app.post('/api/detect-labels', optionalAuth, async (req: AuthenticatedRequest, res) => {
   try {
     if (req.user) {
-      try {
-        await checkUsage(req.user.uid);
-      } catch (error: any) {
-        if (error.message === 'LIMIT_REACHED') {
-          return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
+      if (!req.isAdmin) {
+        try {
+          await checkUsage(req.user.uid);
+        } catch (error: any) {
+          if (error.message === 'LIMIT_REACHED') {
+            return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
+          }
+          throw error;
         }
-        throw error;
       }
     } else {
       if (req.headers['x-guest-trial'] !== 'true') {
@@ -166,13 +170,15 @@ app.post('/api/generate', optionalAuth, upload.none(), async (req: Authenticated
     const { sessionId, deck_name, selected_images, card_types, occlusionData } = req.body;
 
     if (req.user) {
-      try {
-        await checkAndIncrementUsage(req.user.uid);
-      } catch (error: any) {
-        if (error.message === 'LIMIT_REACHED') {
-          return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
+      if (!req.isAdmin) {
+        try {
+          await checkAndIncrementUsage(req.user.uid);
+        } catch (error: any) {
+          if (error.message === 'LIMIT_REACHED') {
+            return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
+          }
+          throw error;
         }
-        throw error;
       }
     } else {
       if (req.headers['x-guest-trial'] !== 'true') {

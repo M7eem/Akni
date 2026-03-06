@@ -28,6 +28,7 @@ function getFirebaseAdmin() {
 
 export interface AuthenticatedRequest extends Request {
   user?: admin.auth.DecodedIdToken;
+  isAdmin?: boolean;
 }
 
 export const optionalAuth = async (
@@ -47,6 +48,10 @@ export const optionalAuth = async (
     const app = getFirebaseAdmin();
     const decodedToken = await app.auth().verifyIdToken(token);
     req.user = decodedToken;
+
+    const profileDoc = await app.firestore().collection('users').doc(decodedToken.uid).collection('profile').doc('data').get();
+    req.isAdmin = profileDoc.exists && profileDoc.data()?.isAdmin === true;
+
     next();
   } catch (error) {
     console.error('Error verifying Firebase token:', error);
@@ -71,6 +76,10 @@ export const requireAuth = async (
     const app = getFirebaseAdmin();
     const decodedToken = await app.auth().verifyIdToken(token);
     req.user = decodedToken;
+
+    const profileDoc = await app.firestore().collection('users').doc(decodedToken.uid).collection('profile').doc('data').get();
+    req.isAdmin = profileDoc.exists && profileDoc.data()?.isAdmin === true;
+
     next();
   } catch (error) {
     console.error('Error verifying Firebase token:', error);

@@ -2,6 +2,11 @@ import { doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export const checkUsage = async (uid: string) => {
+  const profileDoc = await getDoc(doc(db, 'users', uid, 'profile', 'data'));
+  if (profileDoc.exists() && profileDoc.data().isAdmin === true) {
+    return true; // skip all limit checks, unlimited access
+  }
+
   const usageRef = doc(db, 'users', uid, 'usage', 'current');
   const usageDoc = await getDoc(usageRef);
   const now = new Date();
@@ -25,6 +30,11 @@ export const checkUsage = async (uid: string) => {
 };
 
 export const checkAndIncrementUsage = async (uid: string) => {
+  const profileDoc = await getDoc(doc(db, 'users', uid, 'profile', 'data'));
+  if (profileDoc.exists() && profileDoc.data().isAdmin === true) {
+    return 0; // skip all limit checks, unlimited access
+  }
+
   const usageRef = doc(db, 'users', uid, 'usage', 'current');
   const usageDoc = await getDoc(usageRef);
   const now = new Date();
@@ -61,6 +71,13 @@ export const checkAndIncrementUsage = async (uid: string) => {
 };
 
 export const getUsage = async (uid: string) => {
+  const profileDoc = await getDoc(doc(db, 'users', uid, 'profile', 'data'));
+  if (profileDoc.exists() && profileDoc.data().isAdmin === true) {
+    const now = new Date();
+    const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { used: 0, limit: 9999, resetsOn }; // Unlimited for UI
+  }
+
   const usageRef = doc(db, 'users', uid, 'usage', 'current');
   const usageDoc = await getDoc(usageRef);
   const now = new Date();
