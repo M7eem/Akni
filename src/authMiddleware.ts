@@ -30,6 +30,30 @@ export interface AuthenticatedRequest extends Request {
   user?: admin.auth.DecodedIdToken;
 }
 
+export const optionalAuth = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  const token = authHeader.split('Bearer ')[1];
+
+  try {
+    const app = getFirebaseAdmin();
+    const decodedToken = await app.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error('Error verifying Firebase token:', error);
+    next();
+  }
+};
+
 export const requireAuth = async (
   req: AuthenticatedRequest,
   res: Response,

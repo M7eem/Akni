@@ -9,7 +9,8 @@ import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
 import { generateOcclusionCards, detectLabelsForImage, generateOcclusionCardsFromLabels } from './src/services/occlusionService';
-import { requireAuth } from './src/authMiddleware';
+import { requireAuth, optionalAuth, AuthenticatedRequest } from './src/authMiddleware';
+import { checkAndIncrementUsage, checkUsage } from './src/services/deckHistoryService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,8 +66,23 @@ app.get('/api/image/:sessionId/:imageName', (req, res) => {
 });
 
 /** Extract images from uploaded files, store in session, return names only */
-app.post('/api/extract-images', requireAuth, upload.array('files'), async (req, res) => {
+app.post('/api/extract-images', optionalAuth, upload.array('files'), async (req: AuthenticatedRequest, res) => {
   try {
+    if (req.user) {
+      try {
+        await checkUsage(req.user.uid);
+      } catch (error: any) {
+        if (error.message === 'LIMIT_REACHED') {
+          return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
+        }
+        throw error;
+      }
+    } else {
+      if (req.headers['x-guest-trial'] !== 'true') {
+        return res.status(401).json({ error: 'Unauthorized: Guest trial already used or missing header' });
+      }
+    }
+
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
       return res.status(400).json({ error: 'No files uploaded' });
@@ -91,8 +107,23 @@ app.post('/api/extract-images', requireAuth, upload.array('files'), async (req, 
 });
 
 /** Detect labels for an image already in session — no base64 over the wire */
-app.post('/api/detect-labels', async (req, res) => {
+app.post('/api/detect-labels', optionalAuth, async (req: AuthenticatedRequest, res) => {
   try {
+    if (req.user) {
+      try {
+        await checkUsage(req.user.uid);
+      } catch (error: any) {
+        if (error.message === 'LIMIT_REACHED') {
+          return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
+        }
+        throw error;
+      }
+    } else {
+      if (req.headers['x-guest-trial'] !== 'true') {
+        return res.status(401).json({ error: 'Unauthorized: Guest trial already used or missing header' });
+      }
+    }
+
     const { sessionId, imageName } = req.body;
     if (!sessionId || !imageName) {
       return res.status(400).json({ error: 'sessionId and imageName are required' });
@@ -130,9 +161,24 @@ app.post('/api/detect-labels', async (req, res) => {
 });
 
 /** Generate Anki deck from session content */
-app.post('/api/generate', requireAuth, upload.none(), async (req, res) => {
+app.post('/api/generate', optionalAuth, upload.none(), async (req: AuthenticatedRequest, res) => {
   try {
     const { sessionId, deck_name, selected_images, card_types, occlusionData } = req.body;
+
+    if (req.user) {
+      try {
+        await checkAndIncrementUsage(req.user.uid);
+      } catch (error: any) {
+        if (error.message === 'LIMIT_REACHED') {
+          return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
+        }
+        throw error;
+      }
+    } else {
+      if (req.headers['x-guest-trial'] !== 'true') {
+        return res.status(401).json({ error: 'Unauthorized: Guest trial already used or missing header' });
+      }
+    }
 
     if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
     if (!deck_name) return res.status(400).json({ error: 'deck_name is required' });
