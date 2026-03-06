@@ -43,7 +43,7 @@ export async function createAnkiPackage(
 
   // Write cards to temp JSON file
   const cardsData = allCards.map(card => ({
-    type: (card as any).type || 'basic', // Ensure type exists
+    type: (card as any).type || 'basic',
     front: card.front,
     back: card.back,
     image: (card.image && images && images[card.image]) ? card.image : null
@@ -66,7 +66,6 @@ with open("""${dataPath}""") as f:
 cards = data['cards']
 deck_name = data['deckName']
 db_path = data['dbPath']
-# card_types is available but we rely on individual card 'type' field
 
 if os.path.exists(db_path):
     os.remove(db_path)
@@ -111,7 +110,6 @@ model_id_cloze = random.randint(1000000000, 9999999999)
 
 css = """.card{font-family:Arial,sans-serif;font-size:20px;text-align:center;color:#e8e8e8;background-color:#2b2b2b;padding:0 60px 20px 60px;line-height:1.8}b{color:#7dd8f8;font-weight:bold}hr#answer{border:none;border-top:1px solid #555;margin:16px 0}.cloze{font-weight:bold;color:#7dd8f8}"""
 
-# Basic Model
 basic_model = {
     "id": model_id_basic, "name": "Basic", "type": 0, "mod": now, "usn": -1,
     "sortf": 0, "did": deck_id,
@@ -126,7 +124,6 @@ basic_model = {
     "css": css, "latexPre": "", "latexPost": "", "tags": [], "vers": []
 }
 
-# Cloze Model
 cloze_model = {
     "id": model_id_cloze, "name": "Cloze", "type": 1, "mod": now, "usn": -1,
     "sortf": 0, "did": deck_id,
@@ -147,8 +144,6 @@ models_dict = {
 }
 
 models = json.dumps(models_dict)
-
-# Default to basic model for deck config
 target_model_id = model_id_basic
 
 decks = json.dumps({
@@ -184,14 +179,10 @@ c.execute("INSERT INTO col VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
     (1, now, now, now*1000, 11, 0, -1, 0, conf, models, decks, dconf, "{}"))
 
 for i, card in enumerate(cards):
-    # Increment note_id by 1000 to ensure enough space for card IDs (up to 999 cards per note)
-    # This prevents collision between Card IDs of Note A and Card IDs of Note B
     note_id = (now + i) * 1000
     guid = str(random.randint(10**9, 10**10))
-    
-    # Determine type for this specific card
     ctype = card.get('type', 'basic')
-    
+
     if ctype == 'cloze':
         mid = model_id_cloze
     else:
@@ -201,27 +192,23 @@ for i, card in enumerate(cards):
     back = card['back']
     if card.get('image'):
         front += '<br><br><img src="' + card['image'] + '">'
-    
+
     flds = front + "\\x1f" + back
     sfld = card['front']
     csum = int.from_bytes(sfld[:9].encode('utf-8')[:4].ljust(4, b'\\x00'), 'big')
-    
+
     c.execute("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (note_id, guid, mid, now, -1, "", flds, sfld, csum, 0, ""))
-    
-    # Create cards
+
     num_cards = 1
     if ctype == 'cloze':
         import re
-        # Find all {{c(\d+)::
         matches = re.findall(r'{{c(\d+)::', front)
         if matches:
             indices = [int(m) for m in matches]
             num_cards = max(indices) if indices else 1
-    
+
     for ord_idx in range(num_cards):
-        # Card ID = Note ID + 1 + ord
-        # Since Note IDs are 1000 apart, this is safe for up to 999 clozes per note
         c.execute("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (note_id+1+ord_idx, note_id, deck_id, ord_idx, now, -1, 0, 0, i, 0, 0, 0, 0, 0, 0, 0, 0, ""))
 
@@ -247,16 +234,47 @@ print(f"DB created: {len(cards)} cards")
   const dbBuffer = fs.readFileSync(dbPath);
   console.log(`Database size: ${dbBuffer.length} bytes`);
 
+  // ── Collect only images actually referenced in card content ──────
+  const referencedImages = new Set<string>();
+  const imgPattern = /src="([^"]+\.(png|jpg|jpeg|gif|webp))"/gi;
+
+  for (const card of allCards) {
+    const fields = [card.front, card.back];
+    for (const field of fields) {
+      if (!field) continue;
+      let match;
+      const re = new RegExp(imgPattern.source, 'gi');
+      while ((match = re.exec(field)) !== null) {
+        referencedImages.add(match[1]);
+      }
+    }
+  }
+  // Always include occlusion card images (they're referenced via front/back already,
+  // but this ensures they're never accidentally skipped)
+  for (const oc of occlusionCards) {
+    referencedImages.add(oc.frontImageName);
+    referencedImages.add(oc.backImageName);
+  }
+
+  const skipped = Object.keys(images).filter(f => !referencedImages.has(f)).length;
+  const included = Object.keys(images).filter(f => referencedImages.has(f)).length;
+  console.log(`Media: ${included} images included, ${skipped} skipped (not referenced by any card)`);
+  // ─────────────────────────────────────────────────────────────────
+
   // Build ZIP (.apkg = renamed ZIP)
   const zip = new JSZip();
   zip.file('collection.anki2', dbBuffer);
 
   const mediaIndex: Record<string, string> = {};
+  let mediaIdx = 0;
   if (images) {
-    Object.keys(images).forEach((filename, idx) => {
-      mediaIndex[idx.toString()] = filename;
-      zip.file(idx.toString(), images[filename]);
-    });
+    for (const filename of Object.keys(images)) {
+      // Only bundle images that are actually used in cards
+      if (!referencedImages.has(filename)) continue;
+      mediaIndex[mediaIdx.toString()] = filename;
+      zip.file(mediaIdx.toString(), images[filename]);
+      mediaIdx++;
+    }
   }
   zip.file('media', JSON.stringify(mediaIndex));
 
