@@ -1,34 +1,87 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { LogOut, User as UserIcon, History, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-export default function AuthButton() {
+interface AuthButtonProps {
+  usage?: { used: number; limit: number; resetsOn: string | Date };
+  onToggleHistory?: () => void;
+  showHistory?: boolean;
+}
+
+export default function AuthButton({ usage, onToggleHistory, showHistory }: AuthButtonProps) {
   const { user, signOut, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   if (user) {
     return (
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 bg-[#131820] border border-[rgba(255,255,255,0.05)] rounded-full pl-1 pr-3 py-1">
-          {user.photoURL ? (
-            <img src={user.photoURL} alt={user.displayName || 'User'} className="w-6 h-6 rounded-full" />
-          ) : (
-            <div className="w-6 h-6 rounded-full bg-[#7dd3fc]/20 text-[#7dd3fc] flex items-center justify-center">
-              <UserIcon size={14} />
+      <div className="relative group z-50">
+        <button className="flex items-center gap-3 focus:outline-none">
+          <div className="flex items-center gap-2 bg-[#131820] border border-[rgba(255,255,255,0.05)] rounded-full pl-1 pr-3 py-1 group-hover:border-[rgba(125,211,252,0.3)] transition-colors relative">
+            <div className="relative">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt={user.displayName || 'User'} className="w-6 h-6 rounded-full" />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-[#7dd3fc]/20 text-[#7dd3fc] flex items-center justify-center">
+                  <UserIcon size={14} />
+                </div>
+              )}
+              {usage && usage.used >= usage.limit && (
+                <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#131820]" title="Monthly limit reached" />
+              )}
+            </div>
+            <span className="text-sm font-medium text-[#eef6ff] max-w-[100px] truncate">
+              {user.displayName || user.email}
+            </span>
+          </div>
+        </button>
+
+        {/* Dropdown Menu */}
+        <div className="absolute right-0 top-full mt-2 w-64 bg-[#131820] border border-[rgba(255,255,255,0.1)] rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right p-4">
+          
+          {/* Usage Stats */}
+          {usage && (
+            <div className="mb-4 pb-4 border-b border-[rgba(255,255,255,0.05)]">
+              <div className="flex justify-between items-center text-xs text-[#8899aa] mb-2">
+                <span className="flex items-center gap-1.5 font-medium"><BarChart3 size={12} /> Monthly Usage</span>
+                <span className={usage.used >= usage.limit ? 'text-red-400 font-bold' : 'text-[#eef6ff]'}>
+                  {usage.used} / {usage.limit} decks
+                </span>
+              </div>
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${usage.used >= usage.limit ? 'bg-red-500' : 'bg-[#7dd3fc]'}`} 
+                  style={{ width: `${Math.min((usage.used / usage.limit) * 100, 100)}%` }} 
+                />
+              </div>
+              {usage.used >= usage.limit && (
+                <div className="text-[11px] text-red-400 mt-2 text-center bg-red-500/10 py-1 rounded border border-red-500/20">
+                  Limit reached. Resets {new Date(usage.resetsOn).toLocaleDateString()}
+                </div>
+              )}
             </div>
           )}
-          <span className="text-sm font-medium text-[#eef6ff] max-w-[100px] truncate">
-            {user.displayName || user.email}
-          </span>
+
+          <div className="flex flex-col gap-1">
+            {onToggleHistory && (
+              <button
+                onClick={onToggleHistory}
+                className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors ${showHistory ? 'bg-[#7dd3fc]/10 text-[#7dd3fc]' : 'text-[#8899aa] hover:text-[#eef6ff] hover:bg-white/5'}`}
+              >
+                <History size={16} />
+                Deck History
+              </button>
+            )}
+            
+            <button
+              onClick={() => signOut()}
+              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-[#8899aa] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            >
+              <LogOut size={16} />
+              Sign Out
+            </button>
+          </div>
         </div>
-        <button
-          onClick={signOut}
-          className="text-[#8899aa] hover:text-[#7dd3fc] transition-colors p-1.5 rounded-lg hover:bg-[#7dd3fc]/10"
-          title="Sign Out"
-        >
-          <LogOut size={18} />
-        </button>
       </div>
     );
   }

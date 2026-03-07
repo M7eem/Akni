@@ -338,20 +338,16 @@ export default function HomePage() {
         <div className="nav-links flex items-center gap-6">
           <a href="#how">How it works</a>
           <a href="#features">Features</a>
-          {user && (
-            <button 
-              onClick={() => setShowHistory(!showHistory)} 
-              className={`flex items-center gap-2 text-sm font-medium transition-colors ${showHistory ? 'text-[#7dd3fc]' : 'text-[#8899aa] hover:text-[#eef6ff]'}`}
-            >
-              <History size={16} /> History
-            </button>
-          )}
           {!user && (
             <a href="/auth" className="text-[13px] font-medium text-[#8899aa] hover:text-[#eef6ff] transition-colors">
               Log in
             </a>
           )}
-          <AuthButton />
+          <AuthButton 
+            usage={usage}
+            onToggleHistory={() => setShowHistory(!showHistory)}
+            showHistory={showHistory}
+          />
         </div>
       </nav>
 
