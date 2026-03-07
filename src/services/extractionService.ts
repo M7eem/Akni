@@ -51,7 +51,18 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
     const uniqueName = `${baseFilename}_${path.basename(filePath)}`;
     try {
       const content = await zipEntry.async('nodebuffer');
-      if (content && content.length > 0) images[uniqueName] = content;
+      if (content && content.length > 0) {
+        try {
+          const resized = await sharp(content)
+            .resize({ width: 1024, withoutEnlargement: true })
+            .png()
+            .toBuffer();
+          images[uniqueName] = resized;
+        } catch (resizeErr) {
+          console.warn(`Failed to resize PPTX image ${filePath}, using original:`, resizeErr);
+          images[uniqueName] = content;
+        }
+      }
     } catch (err) {
       console.warn(`Failed to extract PPTX image ${filePath}:`, err);
     }
@@ -123,7 +134,10 @@ async function extractPdf(buffer: Buffer, filename: string): Promise<{ text: str
         
         // Often PDF images are raw bitmaps or JPEG. We can try to normalize them using sharp
         try {
-          const normalizedBuffer = await sharp(imgBuffer).png().toBuffer();
+          const normalizedBuffer = await sharp(imgBuffer)
+            .resize({ width: 1024, withoutEnlargement: true })
+            .png()
+            .toBuffer();
           images[uniqueName] = normalizedBuffer;
           fullText += `\n[IMAGE: ${uniqueName}]`;
           imgCount++;
