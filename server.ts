@@ -189,7 +189,8 @@ app.post('/api/generate', optionalAuth, upload.none(), async (req: Authenticated
           if (error.message === 'LIMIT_REACHED') {
             return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
           }
-          throw error;
+          // Non-blocking: If Firestore fails, log it but allow the user to proceed
+          console.warn(`Firestore usage check failed for user ${req.user.uid}, proceeding anyway:`, error);
         }
       }
     } else {
