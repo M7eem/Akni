@@ -275,11 +275,17 @@ app.post('/api/generate', optionalAuth, upload.none(), async (req: Authenticated
     res.setHeader('Content-Disposition', `attachment; filename="${outputFilename}"`);
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Card-Count');
     res.setHeader('X-Card-Count', totalCards.toString());
-    res.setHeader('Content-Length', fileSize);
+    res.setHeader('Content-Length', fileSize.toString());
 
     const fileStream = fs.createReadStream(outputPath);
     fileStream.pipe(res);
-    fileStream.on('close', () => { try { fs.unlinkSync(outputPath); } catch {} });
+    res.on('finish', () => {
+      try {
+        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+      } catch (err) {
+        console.error('Error unlinking output file:', err);
+      }
+    });
 
   } catch (error) {
     console.error('Error generating flashcards:', error);

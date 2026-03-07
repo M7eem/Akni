@@ -25,7 +25,7 @@ type Status = 'idle' | 'extracting' | 'detecting' | 'generating' | 'building' | 
 
 import { useNavigate } from 'react-router-dom';
 
-const LoadingScreen = () => {
+const LoadingScreen = ({ status }: { status: Status }) => {
   const [loadingStep, setLoadingStep] = useState(0);
   const steps = [
     'Reading your lecture...',
@@ -45,9 +45,15 @@ const LoadingScreen = () => {
     <div key="generating" className="text-center py-12 fade-in">
       <Loader2 className="animate-spin mx-auto mb-8 text-[var(--accent)]" size={56} />
       <h2 className="text-2xl font-bold mb-3 text-[#eef6ff] transition-all duration-500">
-        {steps[loadingStep]}
+        {status === 'building' ? 'Building your .apkg file...' : 
+         status === 'generating' ? steps[loadingStep] : 
+         'Downloading your deck...'}
       </h2>
-      <p className="text-[#8899aa] text-sm">This usually takes under 60 seconds.</p>
+      <p className="text-[#8899aa] text-sm">
+        {status === 'building' ? 'Adding media and formatting cards.' : 
+         status === 'generating' ? 'This usually takes under 60 seconds.' : 
+         'Almost ready to download.'}
+      </p>
       
       {/* Progress bar */}
       <div className="absolute bottom-0 left-0 h-1 bg-[var(--accent)] transition-all duration-[60000ms] ease-linear w-full" style={{ width: '100%', transformOrigin: 'left', animation: 'progress 60s linear forwards' }} />
@@ -251,6 +257,7 @@ export default function HomePage() {
     try {
       const response = await safeFetch('/api/generate', { method: 'POST', body: formData });
       clearInterval(ticker);
+      setStatus('building'); // Show building status while reading blob
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -269,11 +276,11 @@ export default function HomePage() {
       setFileName(name);
       
       if (user) {
-        await saveDeckHistory(user.uid, {
+        saveDeckHistory(user.uid, {
           deckName: safeName,
           cardCount,
           fileName: name
-        });
+        }).catch(console.error);
         getUsage(user.uid).then(setUsage).catch(console.error);
       } else {
         localStorage.setItem('guestDeckUsed', 'true');
@@ -541,7 +548,7 @@ export default function HomePage() {
 
             {/* ── GENERATING ── */}
             {step === 'generating' && (
-              <LoadingScreen />
+              <LoadingScreen status={status} />
             )}
 
             {/* ── COMPLETE ── */}
