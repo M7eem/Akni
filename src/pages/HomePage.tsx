@@ -281,7 +281,7 @@ export default function HomePage() {
           cardCount,
           fileName: name
         }).catch(console.error);
-        getUsage(user.uid).then(setUsage).catch(console.error);
+        getUsage(user.uid, true).then(setUsage).catch(console.error);
       } else {
         localStorage.setItem('guestDeckUsed', 'true');
       }
@@ -447,15 +447,6 @@ export default function HomePage() {
                     <>Generate My Deck <ArrowRight size={18} /></>
                   )}
                 </button>
-                {user && usage && usage.used >= usage.limit ? (
-                  <div style={{ color: 'var(--muted2)', fontSize: '12px', textAlign: 'center', marginTop: '8px' }}>
-                    You've used all {usage.limit} free decks this month. Resets on {new Date(usage.resetsOn).toLocaleDateString()}.
-                  </div>
-                ) : user && usage ? (
-                  <div style={{ color: 'var(--muted2)', fontSize: '12px', textAlign: 'center', marginTop: '8px' }}>
-                    {usage.used} of {usage.limit} decks used this month
-                  </div>
-                ) : null}
 
                 <div className="trust">
                   <div className="trust-item"><Lock size={12} /> Secure</div>

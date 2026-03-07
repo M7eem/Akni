@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, updateDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc, updateDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 const getUserRef = (uid: string) => doc(db, 'users', uid);
@@ -124,10 +124,10 @@ export const checkAndIncrementUsage = async (uid: string, email?: string) => {
   return newCount;
 };
 
-export const getUsage = async (uid: string) => {
+export const getUsage = async (uid: string, forceRefresh = false) => {
   try {
     const userRef = getUserRef(uid);
-    const userDoc = await getDoc(userRef);
+    const userDoc = await (forceRefresh ? getDocFromServer(userRef) : getDoc(userRef));
     
     const now = new Date();
     let resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
