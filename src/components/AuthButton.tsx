@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, User as UserIcon, History, BarChart3 } from 'lucide-react';
+import { LogOut, User as UserIcon, History, BarChart3, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface AuthButtonProps {
@@ -18,17 +18,8 @@ export default function AuthButton({ usage, onToggleHistory, showHistory }: Auth
       <div className="relative group z-50">
         <button className="flex items-center gap-3 focus:outline-none">
           <div className="flex items-center gap-2 bg-[#131820] border border-[rgba(255,255,255,0.05)] rounded-full pl-1 pr-3 py-1 group-hover:border-[rgba(125,211,252,0.3)] transition-colors relative">
-            <div className="relative">
-              {user.photoURL ? (
-                <img src={user.photoURL} alt={user.displayName || 'User'} className="w-6 h-6 rounded-full" />
-              ) : (
-                <div className="w-6 h-6 rounded-full bg-[#7dd3fc]/20 text-[#7dd3fc] flex items-center justify-center">
-                  <UserIcon size={14} />
-                </div>
-              )}
-              {usage && usage.used >= usage.limit && (
-                <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#131820]" title="Monthly limit reached" />
-              )}
+            <div className="w-6 h-6 rounded-full bg-[#7dd3fc]/20 text-[#7dd3fc] flex items-center justify-center">
+              <UserIcon size={14} />
             </div>
             <span className="text-sm font-medium text-[#eef6ff] max-w-[100px] truncate">
               {user.displayName || user.email}
@@ -63,6 +54,14 @@ export default function AuthButton({ usage, onToggleHistory, showHistory }: Auth
           )}
 
           <div className="flex flex-col gap-1">
+            <button
+              onClick={() => { /* Navigate to account page or open modal */ }}
+              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-[#8899aa] hover:text-[#eef6ff] hover:bg-white/5 transition-colors"
+            >
+              <Settings size={16} />
+              Account
+            </button>
+
             {onToggleHistory && (
               <button
                 onClick={onToggleHistory}
