@@ -10,7 +10,7 @@ import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
 import { generateOcclusionCards, detectLabelsForImage, generateOcclusionCardsFromLabels } from './src/services/occlusionService';
 import { requireAuth, optionalAuth, AuthenticatedRequest } from './src/authMiddleware';
-import { checkAndIncrementUsage, checkUsage } from './src/services/deckHistoryService';
+import { checkAndIncrementUsage, checkUsage } from './src/services/adminDeckHistoryService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -129,7 +129,8 @@ app.post('/api/detect-labels', optionalAuth, async (req: AuthenticatedRequest, r
           if (error.message === 'LIMIT_REACHED') {
             return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
           }
-          throw error;
+          // Non-blocking: If Firestore fails, log it but allow the user to proceed
+          console.warn(`Firestore usage check failed for user ${req.user.uid}, proceeding anyway:`, error);
         }
       }
     } else {

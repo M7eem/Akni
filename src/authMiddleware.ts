@@ -1,8 +1,10 @@
 import { cert, initializeApp, getApp, App } from 'firebase-admin/app';
 import { getAuth, DecodedIdToken } from 'firebase-admin/auth';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { Request, Response, NextFunction } from 'express';
 
 let firebaseApp: App | null = null;
+let adminDb: Firestore | null = null;
 
 function getFirebaseAdmin(): App {
   if (!firebaseApp) {
@@ -31,6 +33,20 @@ function getFirebaseAdmin(): App {
     console.log('Firebase Admin initialized successfully');
   }
   return firebaseApp;
+}
+
+export function getAdminDb(): Firestore {
+  if (!adminDb) {
+    const app = getFirebaseAdmin();
+    adminDb = getFirestore(app);
+    try {
+      adminDb.settings({ preferRest: true });
+      console.log('Firebase Admin Firestore initialized with preferRest: true');
+    } catch (error) {
+      console.warn('Failed to set preferRest on Firestore (might be already initialized):', error);
+    }
+  }
+  return adminDb;
 }
 
 // ── Admin check via env variable ──────────────────────────────
