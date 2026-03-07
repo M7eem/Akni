@@ -4,9 +4,17 @@ import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
 
+interface UsageData {
+  used: number;
+  limit: number;
+  resetsOn: Date;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  usage: UsageData | null;
+  setUsage: React.Dispatch<React.SetStateAction<UsageData | null>>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
@@ -17,6 +25,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [usage, setUsage] = useState<UsageData | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -24,8 +33,48 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error setting persistence:", error);
     });
 
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged(async (user) => {
       setUser(user);
+      if (user) {
+        // Fetch usage immediately
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
+          
+          const now = new Date();
+          let resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+          let used = 0;
+          let limit = 10;
+
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.isAdmin === true) {
+              limit = 9999;
+            } else {
+              let periodStart = now;
+              if (data.periodStart) {
+                if (typeof data.periodStart.toDate === 'function') {
+                  periodStart = data.periodStart.toDate();
+                } else if (data.periodStart instanceof Date) {
+                  periodStart = data.periodStart;
+                }
+              }
+              
+              if (periodStart.getMonth() === now.getMonth() && periodStart.getFullYear() === now.getFullYear()) {
+                used = data.decksUsedThisMonth || 0;
+              }
+            }
+          }
+          setUsage({ used, limit, resetsOn });
+        } catch (error) {
+          console.error("Error fetching usage in AuthContext:", error);
+          // Set default on error
+          const now = new Date();
+          setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
+        }
+      } else {
+        setUsage(null);
+      }
       setLoading(false);
     });
     return unsubscribe;
@@ -46,14 +95,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           isAdmin: false,
           decksUsedThisMonth: 0,
           createdAt: serverTimestamp(),
-          lastLogin: serverTimestamp()
+          lastLogin: serverTimestamp(),
+          periodStart: serverTimestamp()
         });
+        // Update local usage state for new user
+        const now = new Date();
+        setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
       } else {
         await setDoc(userRef, {
           email: user.email,
           displayName: user.displayName,
           lastLogin: serverTimestamp()
         }, { merge: true });
+        // Usage will be fetched by onAuthStateChanged or is already there
       }
     } catch (error) {
       console.error("Error signing in with Google", error);
@@ -64,6 +118,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signOut = async () => {
     try {
       await firebaseSignOut(auth);
+      setUsage(null);
     } catch (error) {
       console.error("Error signing out", error);
     }
@@ -79,7 +134,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   if (loading) return <div style={{ minHeight: '100vh', background: '#07090f' }} />;
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut, getIdToken }}>
+    <AuthContext.Provider value={{ user, loading, usage, setUsage, signInWithGoogle, signOut, getIdToken }}>
       {!loading && children}
     </AuthContext.Provider>
   );

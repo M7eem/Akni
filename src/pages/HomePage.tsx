@@ -42,18 +42,23 @@ const LoadingScreen = ({ status }: { status: Status }) => {
   }, []);
 
   return (
-    <div key="generating" className="text-center py-12 fade-in">
-      <Loader2 className="animate-spin mx-auto mb-8 text-[var(--accent)]" size={56} />
-      <h2 className="text-2xl font-bold mb-3 text-[#eef6ff] transition-all duration-500">
-        {status === 'building' ? 'Building your .apkg file...' : 
-         status === 'generating' ? steps[loadingStep] : 
-         'Downloading your deck...'}
-      </h2>
-      <p className="text-[#8899aa] text-sm">
-        {status === 'building' ? 'Adding media and formatting cards.' : 
-         status === 'generating' ? 'This usually takes under 60 seconds.' : 
-         'Almost ready to download.'}
-      </p>
+    <div key="generating" className="fade-in">
+      <div className="deck-card-title">Create your deck</div>
+      <div className="deck-card-sub">Upload your lecture and we'll do the rest</div>
+      
+      <div className="text-center py-12">
+        <Loader2 className="animate-spin mx-auto mb-8 text-[var(--accent)]" size={56} />
+        <h2 className="text-2xl font-bold mb-3 text-[#eef6ff] transition-all duration-500">
+          {status === 'building' ? 'Building your .apkg file...' : 
+           status === 'generating' ? steps[loadingStep] : 
+           'Downloading your deck...'}
+        </h2>
+        <p className="text-[#8899aa] text-sm">
+          {status === 'building' ? 'Adding media and formatting cards.' : 
+           status === 'generating' ? 'This usually takes under 60 seconds.' : 
+           'Almost ready to download.'}
+        </p>
+      </div>
       
       {/* Progress bar */}
       <div className="absolute bottom-0 left-0 h-1 bg-[var(--accent)] transition-all duration-[60000ms] ease-linear w-full" style={{ width: '100%', transformOrigin: 'left', animation: 'progress 60s linear forwards' }} />
@@ -85,20 +90,11 @@ export default function HomePage() {
   const [showHistory, setShowHistory] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
-  const [usage, setUsage] = useState<{ used: number, limit: number, resetsOn: Date } | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
-  const { user, getIdToken } = useAuth();
+  const { user, getIdToken, usage, setUsage } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (user) {
-      getUsage(user.uid).then(setUsage).catch(console.error);
-    } else {
-      setUsage(null);
-    }
-  }, [user]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -276,11 +272,16 @@ export default function HomePage() {
       setFileName(name);
       
       if (user) {
+        // Optimistic update
+        setUsage(prev => prev ? { ...prev, used: prev.used + 1 } : null);
+        
         saveDeckHistory(user.uid, {
           deckName: safeName,
           cardCount,
           fileName: name
         }).catch(console.error);
+        
+        // Background sync
         getUsage(user.uid, true).then(setUsage).catch(console.error);
       } else {
         localStorage.setItem('guestDeckUsed', 'true');
@@ -547,26 +548,31 @@ export default function HomePage() {
 
             {/* ── COMPLETE ── */}
             {step === 'complete' && (
-              <div key="complete" className="text-center py-4 fade-in">
-                <div className="w-16 h-16 bg-[rgba(125,211,252,0.1)] text-[#7dd3fc] rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(125,211,252,0.15)]">
-                  <CheckCircle size={32} />
-                </div>
-                <h2 className="text-2xl font-bold mb-2 text-[#eef6ff]">Deck Ready!</h2>
-                <p className="text-[#8899aa] mb-8">Generated "{fileName}"</p>
-                <div className="flex flex-col gap-3">
-                  <a
-                    href={downloadUrl}
-                    download={fileName}
-                    className="gen-btn"
-                  >
-                    <Download size={20} /> Download .apkg
-                  </a>
-                  <button
-                    onClick={reset}
-                    className="w-full py-3 rounded-xl font-medium text-[#8899aa] border border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.03)] transition-all text-sm"
-                  >
-                    Create Another Deck
-                  </button>
+              <div key="complete" className="fade-in">
+                <div className="deck-card-title">Create your deck</div>
+                <div className="deck-card-sub">Upload your lecture and we'll do the rest</div>
+
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 bg-[rgba(125,211,252,0.1)] text-[#7dd3fc] rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_20px_rgba(125,211,252,0.15)]">
+                    <CheckCircle size={32} />
+                  </div>
+                  <h2 className="text-2xl font-bold mb-2 text-[#eef6ff]">Deck Ready!</h2>
+                  <p className="text-[#8899aa] mb-8">Generated "{fileName}"</p>
+                  <div className="flex flex-col gap-3">
+                    <a
+                      href={downloadUrl}
+                      download={fileName}
+                      className="gen-btn"
+                    >
+                      <Download size={20} /> Download .apkg
+                    </a>
+                    <button
+                      onClick={reset}
+                      className="w-full py-3 rounded-xl font-medium text-[#8899aa] border border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.03)] transition-all text-sm"
+                    >
+                      Create Another Deck
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
