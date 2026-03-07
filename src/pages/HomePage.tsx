@@ -520,6 +520,12 @@ export default function HomePage() {
                   })}
                 </div>
 
+                {errorMessage && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-200 text-sm flex items-center gap-2">
+                    <AlertCircle size={16} /> {errorMessage}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-3">
                   <button
                     onClick={handleDetectLabels}
