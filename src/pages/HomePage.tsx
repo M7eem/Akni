@@ -507,6 +507,7 @@ export default function HomePage() {
                             alt={img.name}
                             className="w-full h-full object-contain"
                             loading="lazy"
+                            decoding="async"
                           />
                         </div>
                         {isSelected && (

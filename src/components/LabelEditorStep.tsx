@@ -240,6 +240,7 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
             alt={currentImage.name}
             className="max-w-full max-h-[500px] w-auto h-auto block shadow-md rounded"
             draggable={false}
+            decoding="async"
           />
 
           {labels.map(label => {

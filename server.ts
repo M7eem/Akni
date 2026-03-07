@@ -62,6 +62,7 @@ app.get('/api/image/:sessionId/:imageName', (req, res) => {
   if (!imageBuffer) return res.status(404).json({ error: 'Image not found' });
 
   res.setHeader('Content-Type', detectMimeType(imageBuffer as Buffer));
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
   res.send(imageBuffer);
 });
 
