@@ -87,6 +87,7 @@ export default function HomePage() {
   const [showHistory, setShowHistory] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
@@ -178,7 +179,7 @@ export default function HomePage() {
     } catch (error: any) {
       setStatus('error');
       if (error.status === 429) {
-        setErrorMessage(`You've used all 10 free decks this month. Resets on ${usage?.resetsOn ? new Date(usage.resetsOn).toLocaleDateString() : 'the 1st of next month'}.`);
+        setShowLimitModal(true);
       } else if (error.status === 401 && !user) {
         setShowSignUpModal(true);
         setErrorMessage('');
@@ -211,7 +212,7 @@ export default function HomePage() {
     } catch (error: any) {
       setStatus('error');
       if (error.status === 429) {
-        setErrorMessage(`You've used all 10 free decks this month. Resets on ${usage?.resetsOn ? new Date(usage.resetsOn).toLocaleDateString() : 'the 1st of next month'}.`);
+        setShowLimitModal(true);
       } else if (error.status === 401 && !user) {
         setShowSignUpModal(true);
         setErrorMessage('');
@@ -291,7 +292,7 @@ export default function HomePage() {
       setStatus('error');
       
       if (error.status === 429) {
-        setErrorMessage(`You've used all 10 free decks this month. Resets on ${usage?.resetsOn ? new Date(usage.resetsOn).toLocaleDateString() : 'the 1st of next month'}.`);
+        setShowLimitModal(true);
       } else if (error.status === 401 && !user) {
         setShowSignUpModal(true);
         setErrorMessage('');
@@ -788,6 +789,60 @@ export default function HomePage() {
                   Sign up
                 </button>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+        {showLimitModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999,
+              padding: '20px'
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              style={{
+                background: '#0f1420',
+                border: '1px solid #1a2235',
+                borderRadius: '24px',
+                padding: '36px',
+                width: '100%',
+                maxWidth: '400px',
+                position: 'relative',
+                textAlign: 'center'
+              }}
+            >
+              <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#eef6ff', marginBottom: '12px' }}>You've reached your limit</h2>
+              <p style={{ color: '#8899aa', fontSize: '14px', lineHeight: '1.6', marginBottom: '24px' }}>
+                You've used all 10 free decks this month. iLoveAnki is currently in beta — we'll be expanding limits soon. Thank you for being an early user!
+              </p>
+
+              <button 
+                onClick={() => setShowLimitModal(false)}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: '#7dd3fc',
+                  color: '#07090f',
+                  borderRadius: '12px',
+                  fontWeight: 600,
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Got it
+              </button>
             </motion.div>
           </motion.div>
         )}
