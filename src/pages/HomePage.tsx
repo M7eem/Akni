@@ -43,7 +43,7 @@ const LoadingScreen = ({ status }: { status: Status }) => {
 
   return (
     <div key="generating" className="fade-in">
-      <div className="text-center py-12">
+      <div className="text-center py-[80px]">
         <Loader2 className="animate-spin mx-auto mb-8 text-[var(--accent)]" size={56} />
         <h2 className="text-2xl font-bold mb-3 text-[#eef6ff] transition-all duration-500">
           {status === 'building' ? 'Building your .apkg file...' : 
@@ -271,7 +271,7 @@ export default function HomePage() {
       
       if (user) {
         // Optimistic update
-        setUsage(prev => prev ? { ...prev, used: prev.used + 1 } : null);
+        setUsage(prev => prev ? { ...prev, used: prev.used + 1 } : prev);
         
         saveDeckHistory(user.uid, {
           deckName: safeName,
@@ -343,7 +343,6 @@ export default function HomePage() {
             </a>
           )}
           <AuthButton 
-            usage={usage}
             onToggleHistory={() => setShowHistory(!showHistory)}
             showHistory={showHistory}
           />
@@ -360,7 +359,9 @@ export default function HomePage() {
             {step !== 'labelEditor' && (
               <>
                 <h1>Turn your lectures into<br/><span className="icy">Anki flashcards</span></h1>
-                <p className="hero-sub">Upload a PDF or PPTX and get a complete Anki deck in under a minute.</p>
+                <p className="hero-sub" style={{ marginBottom: step === 'generating' ? '24px' : '48px' }}>
+                  Upload a PDF or PPTX and get a complete Anki deck in under a minute.
+                </p>
 
                 <div className="deck-card">
                   {/* ── UPLOAD FORM ── */}

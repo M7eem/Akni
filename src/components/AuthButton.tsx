@@ -4,13 +4,12 @@ import { LogOut, User as UserIcon, History, BarChart3, Settings } from 'lucide-r
 import { useNavigate } from 'react-router-dom';
 
 interface AuthButtonProps {
-  usage?: { used: number; limit: number; resetsOn: string | Date };
   onToggleHistory?: () => void;
   showHistory?: boolean;
 }
 
-export default function AuthButton({ usage, onToggleHistory, showHistory }: AuthButtonProps) {
-  const { user, signOut, signInWithGoogle } = useAuth();
+export default function AuthButton({ onToggleHistory, showHistory }: AuthButtonProps) {
+  const { user, signOut, signInWithGoogle, usage } = useAuth();
   const navigate = useNavigate();
 
   if (user) {
