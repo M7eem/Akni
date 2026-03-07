@@ -33,37 +33,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error setting persistence:", error);
     });
 
-    const unsubscribe = auth.onAuthStateChanged(async (user) => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user);
+      setLoading(false);
+      
       if (user) {
-        // Fetch usage immediately
-        try {
-          const userRef = doc(db, 'users', user.uid);
-          const userDoc = await getDoc(userRef);
-          
-          const now = new Date();
-          let resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-          let used = 0;
-          let limit = 10;
+        // Fetch usage in background
+        (async () => {
+          try {
+            const userRef = doc(db, 'users', user.uid);
+            const userDoc = await getDoc(userRef);
+            
+            const now = new Date();
+            let resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+            let used = 0;
+            let limit = 10;
 
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            if (data.isAdmin === true) {
-              limit = 9999;
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              if (data.isAdmin === true) {
+                limit = 9999;
+              }
+              used = data.decksUsedThisMonth || 0;
             }
-            used = data.decksUsedThisMonth || 0;
+            setUsage({ used, limit, resetsOn });
+          } catch (error) {
+            console.error("Error fetching usage in AuthContext:", error);
+            // Set default on error
+            const now = new Date();
+            setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
           }
-          setUsage({ used, limit, resetsOn });
-        } catch (error) {
-          console.error("Error fetching usage in AuthContext:", error);
-          // Set default on error
-          const now = new Date();
-          setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
-        }
+        })();
       } else {
         setUsage(null);
       }
-      setLoading(false);
     });
     return unsubscribe;
   }, []);
