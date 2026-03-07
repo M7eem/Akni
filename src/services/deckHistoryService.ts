@@ -71,29 +71,44 @@ export const checkAndIncrementUsage = async (uid: string) => {
 };
 
 export const getUsage = async (uid: string) => {
-  const profileDoc = await getDoc(doc(db, 'users', uid, 'profile', 'data'));
-  if (profileDoc.exists() && profileDoc.data().isAdmin === true) {
+  try {
+    const profileDoc = await getDoc(doc(db, 'users', uid, 'profile', 'data'));
+    if (profileDoc.exists() && profileDoc.data().isAdmin === true) {
+      const now = new Date();
+      const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return { used: 0, limit: 9999, resetsOn }; // Unlimited for UI
+    }
+
+    const usageRef = doc(db, 'users', uid, 'usage', 'current');
+    const usageDoc = await getDoc(usageRef);
+    const now = new Date();
+    
+    let resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    if (!usageDoc.exists()) {
+      return { used: 0, limit: 10, resetsOn };
+    }
+
+    const data = usageDoc.data();
+    
+    // Safety check for periodStart
+    let periodStart = now;
+    if (data.periodStart && typeof data.periodStart.toDate === 'function') {
+      periodStart = data.periodStart.toDate();
+    } else if (data.periodStart instanceof Date) {
+      periodStart = data.periodStart;
+    }
+
+    if (periodStart.getMonth() !== now.getMonth() || periodStart.getFullYear() !== now.getFullYear()) {
+      return { used: 0, limit: 10, resetsOn };
+    }
+
+    return { used: data.decksUsedThisMonth || 0, limit: 10, resetsOn };
+  } catch (error) {
+    console.error("Error fetching usage:", error);
+    // Return a safe default on error
     const now = new Date();
     const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    return { used: 0, limit: 9999, resetsOn }; // Unlimited for UI
-  }
-
-  const usageRef = doc(db, 'users', uid, 'usage', 'current');
-  const usageDoc = await getDoc(usageRef);
-  const now = new Date();
-  
-  let resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-  if (!usageDoc.exists()) {
     return { used: 0, limit: 10, resetsOn };
   }
-
-  const data = usageDoc.data();
-  const periodStart = data.periodStart.toDate();
-  
-  if (periodStart.getMonth() !== now.getMonth() || periodStart.getFullYear() !== now.getFullYear()) {
-    return { used: 0, limit: 10, resetsOn };
-  }
-
-  return { used: data.decksUsedThisMonth, limit: 10, resetsOn };
 };

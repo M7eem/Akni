@@ -31,27 +31,33 @@ export default function AuthButton({ usage, onToggleHistory, showHistory }: Auth
         <div className="absolute right-0 top-full mt-2 w-64 bg-[#131820] border border-[rgba(255,255,255,0.1)] rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right p-4">
           
           {/* Usage Stats */}
-          {usage && (
-            <div className="mb-4 pb-4 border-b border-[rgba(255,255,255,0.05)]">
-              <div className="flex justify-between items-center text-xs text-[#8899aa] mb-2">
-                <span className="flex items-center gap-1.5 font-medium"><BarChart3 size={12} /> Monthly Usage</span>
+          <div className="mb-4 pb-4 border-b border-[rgba(255,255,255,0.05)]">
+            <div className="flex justify-between items-center text-xs text-[#8899aa] mb-2">
+              <span className="flex items-center gap-1.5 font-medium"><BarChart3 size={12} /> Monthly Usage</span>
+              {usage ? (
                 <span className={usage.used >= usage.limit ? 'text-red-400 font-bold' : 'text-[#eef6ff]'}>
                   {usage.used} / {usage.limit} decks
                 </span>
-              </div>
-              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+              ) : (
+                <div className="h-3 w-12 bg-white/10 rounded animate-pulse" />
+              )}
+            </div>
+            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+              {usage ? (
                 <div 
                   className={`h-full rounded-full transition-all duration-500 ${usage.used >= usage.limit ? 'bg-red-500' : 'bg-[#7dd3fc]'}`} 
                   style={{ width: `${Math.min((usage.used / usage.limit) * 100, 100)}%` }} 
                 />
-              </div>
-              {usage.used >= usage.limit && (
-                <div className="text-[11px] text-red-400 mt-2 text-center bg-red-500/10 py-1 rounded border border-red-500/20">
-                  Limit reached. Resets {new Date(usage.resetsOn).toLocaleDateString()}
-                </div>
+              ) : (
+                <div className="h-full w-1/3 bg-white/10 rounded-full animate-pulse" />
               )}
             </div>
-          )}
+            {usage && usage.used >= usage.limit && (
+              <div className="text-[11px] text-red-400 mt-2 text-center bg-red-500/10 py-1 rounded border border-red-500/20">
+                Limit reached. Resets {new Date(usage.resetsOn).toLocaleDateString()}
+              </div>
+            )}
+          </div>
 
           <div className="flex flex-col gap-1">
             <button
