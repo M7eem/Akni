@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, signInWithPopup, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, googleProvider, db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
@@ -32,7 +33,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      const userRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(userRef);
+      
+      if (!docSnap.exists()) {
+        await setDoc(userRef, {
+          email: user.email,
+          displayName: user.displayName,
+          isAdmin: false,
+          decksUsedThisMonth: 0,
+          createdAt: serverTimestamp(),
+          lastLogin: serverTimestamp()
+        });
+      } else {
+        await setDoc(userRef, {
+          email: user.email,
+          displayName: user.displayName,
+          lastLogin: serverTimestamp()
+        }, { merge: true });
+      }
     } catch (error) {
       console.error("Error signing in with Google", error);
       throw error;
