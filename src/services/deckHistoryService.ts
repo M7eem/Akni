@@ -1,9 +1,24 @@
-import { doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
-export const checkUsage = async (uid: string) => {
-  const profileDoc = await getDoc(doc(db, 'users', uid, 'profile', 'data'));
-  if (profileDoc.exists() && profileDoc.data().isAdmin === true) {
+export const checkUsage = async (uid: string, email?: string) => {
+  const profileRef = doc(db, 'users', uid, 'profile', 'data');
+  const profileDoc = await getDoc(profileRef);
+
+  if (!profileDoc.exists() && email) {
+    try {
+      await setDoc(profileRef, {
+        email,
+        isAdmin: false,
+        decksUsedThisMonth: 0,
+        createdAt: serverTimestamp()
+      });
+    } catch (e) {
+      console.warn(`Failed to auto-create profile for ${uid}:`, e);
+    }
+  }
+
+  if (profileDoc.exists() && profileDoc.data()?.isAdmin === true) {
     return true; // skip all limit checks, unlimited access
   }
 
@@ -29,9 +44,24 @@ export const checkUsage = async (uid: string) => {
   return true;
 };
 
-export const checkAndIncrementUsage = async (uid: string) => {
-  const profileDoc = await getDoc(doc(db, 'users', uid, 'profile', 'data'));
-  if (profileDoc.exists() && profileDoc.data().isAdmin === true) {
+export const checkAndIncrementUsage = async (uid: string, email?: string) => {
+  const profileRef = doc(db, 'users', uid, 'profile', 'data');
+  const profileDoc = await getDoc(profileRef);
+
+  if (!profileDoc.exists() && email) {
+    try {
+      await setDoc(profileRef, {
+        email,
+        isAdmin: false,
+        decksUsedThisMonth: 0,
+        createdAt: serverTimestamp()
+      });
+    } catch (e) {
+      console.warn(`Failed to auto-create profile for ${uid}:`, e);
+    }
+  }
+
+  if (profileDoc.exists() && profileDoc.data()?.isAdmin === true) {
     return 0; // skip all limit checks, unlimited access
   }
 

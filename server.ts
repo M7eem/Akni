@@ -76,12 +76,13 @@ app.post('/api/extract-images', optionalAuth, upload.array('files'), async (req:
       }
       if (!req.isAdmin) {
         try {
-          await checkUsage(req.user.uid);
+          await checkUsage(req.user.uid, req.user.email);
         } catch (error: any) {
           if (error.message === 'LIMIT_REACHED') {
             return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
           }
-          throw error;
+          // Non-blocking: If Firestore fails, log it but allow the user to proceed
+          console.warn(`Firestore usage check failed for user ${req.user.uid}, proceeding anyway:`, error);
         }
       }
     } else {
@@ -123,7 +124,7 @@ app.post('/api/detect-labels', optionalAuth, async (req: AuthenticatedRequest, r
       }
       if (!req.isAdmin) {
         try {
-          await checkUsage(req.user.uid);
+          await checkUsage(req.user.uid, req.user.email);
         } catch (error: any) {
           if (error.message === 'LIMIT_REACHED') {
             return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
@@ -183,7 +184,7 @@ app.post('/api/generate', optionalAuth, upload.none(), async (req: Authenticated
       }
       if (!req.isAdmin) {
         try {
-          await checkAndIncrementUsage(req.user.uid);
+          await checkAndIncrementUsage(req.user.uid, req.user.email);
         } catch (error: any) {
           if (error.message === 'LIMIT_REACHED') {
             return res.status(429).json({ error: 'LIMIT_REACHED', message: 'Monthly limit reached' });
