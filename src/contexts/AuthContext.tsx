@@ -50,20 +50,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const data = userDoc.data();
             if (data.isAdmin === true) {
               limit = 9999;
-            } else {
-              let periodStart = now;
-              if (data.periodStart) {
-                if (typeof data.periodStart.toDate === 'function') {
-                  periodStart = data.periodStart.toDate();
-                } else if (data.periodStart instanceof Date) {
-                  periodStart = data.periodStart;
-                }
-              }
-              
-              if (periodStart.getMonth() === now.getMonth() && periodStart.getFullYear() === now.getFullYear()) {
-                used = data.decksUsedThisMonth || 0;
-              }
             }
+            used = data.decksUsedThisMonth || 0;
           }
           setUsage({ used, limit, resetsOn });
         } catch (error) {

@@ -43,9 +43,6 @@ const LoadingScreen = ({ status }: { status: Status }) => {
 
   return (
     <div key="generating" className="fade-in">
-      <div className="deck-card-title">Create your deck</div>
-      <div className="deck-card-sub">Upload your lecture and we'll do the rest</div>
-      
       <div className="text-center py-12">
         <Loader2 className="animate-spin mx-auto mb-8 text-[var(--accent)]" size={56} />
         <h2 className="text-2xl font-bold mb-3 text-[#eef6ff] transition-all duration-500">
