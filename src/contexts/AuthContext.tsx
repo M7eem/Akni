@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { User, signInWithPopup, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
 
@@ -23,15 +23,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error setting persistence:", error);
     });
 
-    getRedirectResult(auth).then((result) => {
-      if (result?.user) {
-        // user signed in via redirect, navigate to home
-        navigate('/');
-      }
-    }).catch((error) => {
-      console.error("Error getting redirect result:", error);
-    });
-
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user);
       setLoading(false);
@@ -41,9 +32,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signInWithGoogle = async () => {
     try {
-      await signInWithRedirect(auth, googleProvider);
+      await signInWithPopup(auth, googleProvider);
     } catch (error) {
       console.error("Error signing in with Google", error);
+      throw error;
     }
   };
 
