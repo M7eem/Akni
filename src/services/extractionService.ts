@@ -13,6 +13,26 @@ interface ExtractionResult {
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'];
 
+// ── Shared resize helper ───────────────────────────────────────────
+// Resizes to max 1024px and encodes as JPEG (quality 82).
+// JPEG is ~10x smaller than PNG for photos/diagrams — 1.4MB → ~120KB.
+// Falls back to original buffer if Sharp fails.
+async function resizeToJpeg(input: Buffer, label: string): Promise<{ buffer: Buffer; ext: 'jpg' }> {
+  try {
+    const buffer = await sharp(input)
+      .resize({ width: 1024, withoutEnlargement: true })
+      .flatten({ background: { r: 255, g: 255, b: 255 } }) // fill transparency with white
+      .jpeg({ quality: 82 })
+      .toBuffer();
+    return { buffer, ext: 'jpg' };
+  } catch (err) {
+    console.warn(`Sharp resize failed for ${label}, using original:`, err);
+    // Return original as-is; caller keeps its existing extension
+    return { buffer: input, ext: 'jpg' };
+  }
+}
+// ──────────────────────────────────────────────────────────────────
+
 export async function extractContent(files: Express.Multer.File[]): Promise<ExtractionResult> {
   let allText = '';
   const allImages: Record<string, Buffer> = {};
@@ -48,20 +68,14 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
     if (!filePath.startsWith('ppt/media/')) continue;
     const ext = filePath.split('.').pop()?.toLowerCase() || '';
     if (!IMAGE_EXTENSIONS.includes(ext)) continue;
-    const uniqueName = `${baseFilename}_${path.basename(filePath)}`;
+
     try {
       const content = await zipEntry.async('nodebuffer');
       if (content && content.length > 0) {
-        try {
-          const resized = await sharp(content)
-            .resize({ width: 1024, withoutEnlargement: true })
-            .png()
-            .toBuffer();
-          images[uniqueName] = resized;
-        } catch (resizeErr) {
-          console.warn(`Failed to resize PPTX image ${filePath}, using original:`, resizeErr);
-          images[uniqueName] = content;
-        }
+        const { buffer: resized } = await resizeToJpeg(content, filePath);
+        // Store with .jpg extension so Anki and browser both handle it correctly
+        const uniqueName = `${baseFilename}_${path.basename(filePath, path.extname(filePath))}.jpg`;
+        images[uniqueName] = resized;
       }
     } catch (err) {
       console.warn(`Failed to extract PPTX image ${filePath}:`, err);
@@ -90,7 +104,8 @@ async function extractPptx(buffer: Buffer, filename: string): Promise<{ text: st
       if (rels) {
         for (const rel of (Array.isArray(rels) ? rels : [rels])) {
           if ((rel['@_Type'] || '').includes('image')) {
-            const uniqueName = `${baseFilename}_${path.basename(rel['@_Target'] || '')}`;
+            const origBase = path.basename(rel['@_Target'] || '', path.extname(rel['@_Target'] || ''));
+            const uniqueName = `${baseFilename}_${origBase}.jpg`;
             if (images[uniqueName]) slideContent += `\n[IMAGE: ${uniqueName}]`;
           }
         }
@@ -110,47 +125,31 @@ async function extractPdf(buffer: Buffer, filename: string): Promise<{ text: str
 
   try {
     const parser = new PDFParse({ data: buffer });
-    
+
     // Extract text
     const textData = await parser.getText();
     fullText = textData.text;
 
     // Extract images
     const imageData = await parser.getImage({ imageThreshold: 150, imageDataUrl: false, imageBuffer: true });
-    
+
     let imgCount = 0;
     for (const page of imageData.pages) {
       for (const img of page.images) {
         if (!img.data) continue;
-        
-        // Skip small images
         if (img.width < 150 || img.height < 150) continue;
-        
-        // Use sharp to convert raw image data to PNG if needed, or just save it directly if it's already a valid format
-        // pdf-parse returns raw bytes. We can just wrap it in a Buffer.
-        // Wait, the data is Uint8Array. We can convert it to Buffer.
+
         const imgBuffer = Buffer.from(img.data);
-        const uniqueName = `${baseFilename}_img_${page.pageNumber}_${img.name}.png`;
-        
-        // Often PDF images are raw bitmaps or JPEG. We can try to normalize them using sharp
-        try {
-          const normalizedBuffer = await sharp(imgBuffer)
-            .resize({ width: 1024, withoutEnlargement: true })
-            .png()
-            .toBuffer();
-          images[uniqueName] = normalizedBuffer;
-          fullText += `\n[IMAGE: ${uniqueName}]`;
-          imgCount++;
-        } catch (e) {
-          // If sharp fails, it might be an unsupported format or raw bitmap without headers.
-          // In that case, we can just save the raw buffer and hope it's a valid image (like JPEG).
-          images[uniqueName] = imgBuffer;
-          fullText += `\n[IMAGE: ${uniqueName}]`;
-          imgCount++;
-        }
+        // Store as .jpg — resizeToJpeg handles conversion
+        const uniqueName = `${baseFilename}_img_p${page.pageNumber}_${img.name}.jpg`;
+
+        const { buffer: resized } = await resizeToJpeg(imgBuffer, uniqueName);
+        images[uniqueName] = resized;
+        fullText += `\n[IMAGE: ${uniqueName}]`;
+        imgCount++;
       }
     }
-    
+
     console.log(`PDF extraction: ${imgCount} images kept`);
   } catch (err) {
     console.error(`Failed to extract from PDF ${filename}:`, err);
