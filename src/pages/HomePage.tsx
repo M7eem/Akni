@@ -118,7 +118,7 @@ const PreviewSection = () => {
   return (
     <section className="section" id="preview">
       <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
-        <div className="section-tag">See it in action</div>
+        <div className="section-tag">Preview</div>
         <div className="section-h">Flashcards that actually test understanding</div>
       </motion.div>
       
@@ -442,7 +442,7 @@ export default function HomePage() {
           </div>
         </a>
         <div className="nav-links flex items-center gap-6">
-          <a href="#preview">See it in action</a>
+          <a href="#preview">Preview</a>
           <a href="#how">How it works</a>
           <a href="#features">Features</a>
           {!user && (
