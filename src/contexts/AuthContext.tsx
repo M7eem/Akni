@@ -33,33 +33,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error setting persistence:", error);
     });
 
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      setUser(user);
+    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+      setUser(firebaseUser);
       setLoading(false);
-      
-      if (user) {
-        // Fetch usage in background
+
+      if (firebaseUser) {
+        // Run in background — create doc if missing, then fetch usage
         (async () => {
           try {
-            const userRef = doc(db, 'users', user.uid);
+            const userRef = doc(db, 'users', firebaseUser.uid);
             const userDoc = await getDoc(userRef);
-            
-            const now = new Date();
-            let resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-            let used = 0;
-            let limit = 10;
 
-            if (userDoc.exists()) {
+            const now = new Date();
+            const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+            if (!userDoc.exists()) {
+              // First time this user has signed in — create their document
+              await setDoc(userRef, {
+                email: firebaseUser.email,
+                displayName: firebaseUser.displayName || '',
+                isAdmin: false,
+                decksUsedThisMonth: 0,
+                createdAt: serverTimestamp(),
+                lastLogin: serverTimestamp(),
+                periodStart: serverTimestamp()
+              });
+              console.log(`Created Firestore doc for new user: ${firebaseUser.uid}`);
+              setUsage({ used: 0, limit: 10, resetsOn });
+            } else {
+              // Existing user — update lastLogin and read usage
+              await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
+
               const data = userDoc.data();
-              if (data.isAdmin === true) {
-                limit = 9999;
-              }
-              used = data.decksUsedThisMonth || 0;
+              const limit = data.isAdmin === true ? 9999 : 10;
+              const used = data.decksUsedThisMonth || 0;
+              setUsage({ used, limit, resetsOn });
             }
-            setUsage({ used, limit, resetsOn });
           } catch (error) {
-            console.error("Error fetching usage in AuthContext:", error);
-            // Set default on error
+            console.error("Error in onAuthStateChanged Firestore sync:", error);
             const now = new Date();
             setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
           }
@@ -71,35 +82,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return unsubscribe;
   }, []);
 
+  // signInWithGoogle no longer creates the doc — onAuthStateChanged handles all users
   const signInWithGoogle = async () => {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      
-      const userRef = doc(db, 'users', user.uid);
-      const docSnap = await getDoc(userRef);
-      
-      if (!docSnap.exists()) {
-        await setDoc(userRef, {
-          email: user.email,
-          displayName: user.displayName,
-          isAdmin: false,
-          decksUsedThisMonth: 0,
-          createdAt: serverTimestamp(),
-          lastLogin: serverTimestamp(),
-          periodStart: serverTimestamp()
-        });
-        // Update local usage state for new user
-        const now = new Date();
-        setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
-      } else {
-        await setDoc(userRef, {
-          email: user.email,
-          displayName: user.displayName,
-          lastLogin: serverTimestamp()
-        }, { merge: true });
-        // Usage will be fetched by onAuthStateChanged or is already there
-      }
+      await signInWithPopup(auth, googleProvider);
     } catch (error) {
       console.error("Error signing in with Google", error);
       throw error;
