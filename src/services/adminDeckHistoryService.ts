@@ -1,5 +1,5 @@
 import { getAdminDb } from '../authMiddleware';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 
 const getUserRef = (uid: string) => getAdminDb().collection('users').doc(uid);
 
@@ -8,54 +8,54 @@ const ensureUserDoc = async (uid: string, email?: string) => {
   const userDoc = await userRef.get();
 
   if (!userDoc.exists) {
-    if (email) {
-      try {
-        await userRef.set({
-          email,
-          isAdmin: false,
-          decksUsedThisMonth: 0,
-          createdAt: FieldValue.serverTimestamp(),
-          periodStart: FieldValue.serverTimestamp()
-        });
-        return await userRef.get(); // Return the new doc
-      } catch (e) {
-        console.warn(`Failed to auto-create profile for ${uid}:`, e);
-      }
+    // Create doc even without email — uid is enough to track usage
+    try {
+      await userRef.set({
+        email: email || '',
+        displayName: '',
+        isAdmin: false,
+        decksUsedThisMonth: 0,
+        createdAt: FieldValue.serverTimestamp(),
+        lastLogin: FieldValue.serverTimestamp(),
+        periodStart: FieldValue.serverTimestamp()
+      });
+      console.log(`Auto-created Firestore doc for user: ${uid}`);
+      return await userRef.get();
+    } catch (e) {
+      console.warn(`Failed to auto-create profile for ${uid}:`, e);
+      return userDoc; // Return non-existent doc — caller handles gracefully
     }
-    return userDoc; // Return non-existent doc if no email or fail
   }
+
   return userDoc;
 };
 
 export const checkUsage = async (uid: string, email?: string) => {
   const userDoc = await ensureUserDoc(uid, email);
 
+  // If doc still doesn't exist (creation failed), allow through
   if (!userDoc.exists) {
+    console.warn(`No user doc for ${uid} — allowing generation`);
     return true;
   }
 
   const data = userDoc.data();
   if (!data) return true;
 
-  if (data.isAdmin === true) {
-    return true;
-  }
+  if (data.isAdmin === true) return true;
 
   const now = new Date();
-  
-  // Check period reset
+
   let periodStart = now;
   if (data.periodStart) {
-    // Admin SDK Timestamp has toDate()
-    if (typeof data.periodStart.toDate === 'function') {
-      periodStart = data.periodStart.toDate();
-    } else if (data.periodStart instanceof Date) { // Should not happen in Admin SDK but safe
-      periodStart = data.periodStart;
-    }
+    periodStart = typeof data.periodStart.toDate === 'function'
+      ? data.periodStart.toDate()
+      : data.periodStart instanceof Date ? data.periodStart : now;
   }
 
+  // New month — reset will happen on increment, allow through
   if (periodStart.getMonth() !== now.getMonth() || periodStart.getFullYear() !== now.getFullYear()) {
-    return true; // Will be reset on increment
+    return true;
   }
 
   if ((data.decksUsedThisMonth || 0) >= 10) {
@@ -65,44 +65,43 @@ export const checkUsage = async (uid: string, email?: string) => {
   return true;
 };
 
-export const checkAndIncrementUsage = async (uid: string, email?: string) => {
-  const userDoc = await ensureUserDoc(uid, email);
+export const checkAndIncrementUsage = async (uid: string, email?: string): Promise<number> => {
   const userRef = getUserRef(uid);
+  const userDoc = await ensureUserDoc(uid, email);
 
   if (!userDoc.exists) {
-    // Fallback create if ensureUserDoc didn't run (e.g. race condition or error)
+    // Last resort — create minimal doc with count of 1
     await userRef.set({
       email: email || '',
+      displayName: '',
       isAdmin: false,
       decksUsedThisMonth: 1,
       createdAt: FieldValue.serverTimestamp(),
+      lastLogin: FieldValue.serverTimestamp(),
       periodStart: FieldValue.serverTimestamp()
     });
+    console.log(`Created doc with count=1 for user: ${uid}`);
     return 1;
   }
 
-  const data = userDoc.data();
-  if (!data) return 1; // Should not happen if exists is true
+  const data = userDoc.data()!;
 
-  if (data.isAdmin === true) {
-    return 0;
-  }
+  if (data.isAdmin === true) return 0; // Admins: don't count
 
   const now = new Date();
   let periodStart = now;
   if (data.periodStart) {
-    if (typeof data.periodStart.toDate === 'function') {
-      periodStart = data.periodStart.toDate();
-    } else if (data.periodStart instanceof Date) {
-      periodStart = data.periodStart;
-    }
+    periodStart = typeof data.periodStart.toDate === 'function'
+      ? data.periodStart.toDate()
+      : data.periodStart instanceof Date ? data.periodStart : now;
   }
 
-  // Reset if new month
+  // New month — reset counter
   if (periodStart.getMonth() !== now.getMonth() || periodStart.getFullYear() !== now.getFullYear()) {
     await userRef.update({
       decksUsedThisMonth: 1,
-      periodStart: FieldValue.serverTimestamp()
+      periodStart: FieldValue.serverTimestamp(),
+      lastLogin: FieldValue.serverTimestamp()
     });
     return 1;
   }
@@ -113,8 +112,10 @@ export const checkAndIncrementUsage = async (uid: string, email?: string) => {
 
   const newCount = (data.decksUsedThisMonth || 0) + 1;
   await userRef.update({
-    decksUsedThisMonth: newCount
+    decksUsedThisMonth: newCount,
+    lastLogin: FieldValue.serverTimestamp()
   });
 
+  console.log(`Usage incremented for ${uid}: ${newCount}/10`);
   return newCount;
 };

@@ -39,13 +39,12 @@ export function getAdminDb(): Firestore {
   if (!adminDb) {
     const app = getFirebaseAdmin();
     adminDb = getFirestore(app);
+    adminDb.settings({ preferRest: true }); // fixes gRPC NOT_FOUND on Railway
     console.log('Firebase Admin Firestore initialized');
   }
   return adminDb;
 }
 
-// ── Admin check via env variable ──────────────────────────────
-// In Railway, add: ADMIN_UIDS=uid1,uid2,uid3
 function isAdminUid(uid: string): boolean {
   const adminUids = process.env.ADMIN_UIDS ?? '';
   if (!adminUids) return false;
