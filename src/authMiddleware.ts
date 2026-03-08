@@ -39,12 +39,7 @@ export function getAdminDb(): Firestore {
   if (!adminDb) {
     const app = getFirebaseAdmin();
     adminDb = getFirestore(app);
-    try {
-      adminDb.settings({ preferRest: true });
-      console.log('Firebase Admin Firestore initialized with preferRest: true');
-    } catch (error) {
-      console.warn('Failed to set preferRest on Firestore (might be already initialized):', error);
-    }
+    console.log('Firebase Admin Firestore initialized');
   }
   return adminDb;
 }
