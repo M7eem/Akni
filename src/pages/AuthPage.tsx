@@ -76,7 +76,10 @@ export default function AuthPage() {
     try {
       if (mode === "signup") {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
-        if (name) await updateProfile(cred.user, { displayName: name });
+        if (name) {
+          await updateProfile(cred.user, { displayName: name });
+          await cred.user.reload();
+        }
         
         // Create user document in Firestore
         const userRef = doc(db, 'users', cred.user.uid);
