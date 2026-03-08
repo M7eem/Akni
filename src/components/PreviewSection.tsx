@@ -86,8 +86,8 @@ const SlidePanel = ({ active }: { active: boolean }) => {
 
       <AnimatePresence mode="wait">
         <motion.div key={slideIdx} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '10px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ background: 'rgba(125,211,252,0.07)', borderLeft: '3px solid rgba(125,211,252,0.4)', borderRadius: '4px', padding: '8px 12px', marginBottom: '14px', fontSize: '13px', fontWeight: 700, color: '#c8e6f8' }}>
+          <div style={{ background: '#0d1117', borderRadius: '10px', padding: '16px', border: '1px solid rgba(125, 211, 252, 0.18)', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ background: 'rgba(125,211,252,0.07)', borderLeft: '3px solid rgba(125,211,252,0.4)', borderRadius: '4px', padding: '8px 12px', marginBottom: '14px', fontSize: '13px', fontWeight: 700, color: '#eef6ff' }}>
               {slide.heading}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', flex: 1 }}>
@@ -99,7 +99,7 @@ const SlidePanel = ({ active }: { active: boolean }) => {
                 </motion.div>
               ))}
             </div>
-            <div style={{ marginTop: 'auto', height: '40px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px dashed rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#445566' }}>
+            <div style={{ marginTop: 'auto', height: '40px', background: '#131820', borderRadius: '6px', border: '1px dashed rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#8899aa' }}>
               {slide.fig}
             </div>
           </div>
@@ -141,9 +141,9 @@ const CardPanel = ({ active }: { active: boolean }) => {
       <AnimatePresence mode="wait">
         <motion.div layout key={cardIdx} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Front */}
-          <motion.div layout style={{ background: 'rgba(255,255,255,0.03)', borderRadius: '10px', padding: '14px', border: '1px solid rgba(125,211,252,0.1)', marginBottom: '8px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontSize: '10px', color: '#556677', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Front</div>
-            <div style={{ fontSize: '12.5px', color: '#c8e6f8', lineHeight: 1.6, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+          <motion.div layout style={{ background: '#0d1117', borderRadius: '10px', padding: '14px', border: '1px solid rgba(125, 211, 252, 0.18)', marginBottom: '8px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px', fontWeight: 700 }}>Front</div>
+            <div style={{ fontSize: '12.5px', color: '#eef6ff', lineHeight: 1.6, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', fontWeight: 500 }}>
               {card.isCloze ? <ClozeText text={card.clozeText!} /> : card.isOcclusion ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%' }}>
                   <div style={{ width: '100%', height: '80px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px dashed rgba(125,211,252,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
@@ -161,9 +161,9 @@ const CardPanel = ({ active }: { active: boolean }) => {
           <AnimatePresence>
             {flipped && (
               <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.35 }} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 }}>
-                <div style={{ background: 'rgba(125,211,252,0.04)', borderRadius: '10px', padding: '14px', border: '1px solid rgba(125,211,252,0.15)', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ fontSize: '10px', color: '#7dd3fc', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>Answer</div>
-                  <div style={{ fontSize: '12px', color: '#8899aa', lineHeight: 1.6, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+                <div style={{ background: '#0d1117', borderRadius: '10px', padding: '14px', border: '1px solid rgba(125, 211, 252, 0.18)', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ fontSize: '10px', color: '#7dd3fc', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', fontWeight: 700 }}>Answer</div>
+                  <div style={{ fontSize: '12px', color: '#8899aa', lineHeight: 1.6, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', fontWeight: 500 }}>
                     {card.isOcclusion ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '100%' }}>
                          <div style={{ width: '100%', height: '80px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px dashed rgba(125,211,252,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
@@ -217,18 +217,18 @@ export const PreviewSection = () => {
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 48px 1fr',
-          background: '#0a0e18',
+          background: '#07090f',
           borderRadius: '24px',
-          border: '1px solid #1a2235',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
           overflow: 'hidden',
           boxShadow: '0 24px 48px rgba(0,0,0,0.5)',
           height: '520px'
         }}>
           {/* LEFT */}
-          <div style={{ borderRight: '1px solid #1a2235', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #1a2235', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'rgba(125,211,252,0.15)', border: '1px solid rgba(125,211,252,0.2)' }} />
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#445566' }}>Source</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#8899aa' }}>Source</span>
               <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#7dd3fc', background: 'rgba(125,211,252,0.08)', border: '1px solid rgba(125,211,252,0.15)', padding: '2px 10px', borderRadius: '10px' }}>
                 Slide {1} / {SLIDES.length}
               </span>
@@ -237,7 +237,7 @@ export const PreviewSection = () => {
           </div>
 
           {/* MIDDLE */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0e18', position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07090f', position: 'relative' }}>
             {/* Animated line connecting left to right */}
             <div style={{ position: 'absolute', width: '100%', height: '2px', background: 'rgba(125,211,252,0.05)', top: '50%', transform: 'translateY(-50%)' }} />
             <AnimatePresence>
@@ -255,15 +255,15 @@ export const PreviewSection = () => {
               transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', zIndex: 1 }}
             >
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#0a0e18', border: '1px solid rgba(125,211,252,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 12px rgba(125,211,252,0.15)' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#07090f', border: '1px solid rgba(125,211,252,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 12px rgba(125,211,252,0.15)' }}>
                 <ChevronRight size={14} color='#7dd3fc' />
               </div>
             </motion.div>
           </div>
 
           {/* RIGHT */}
-          <div style={{ borderLeft: '1px solid #1a2235', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #1a2235', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ borderLeft: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7dd3fc', boxShadow: '0 0 8px rgba(125,211,252,0.4)' }} />
               <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#7dd3fc' }}>Generated Cards</span>
               <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#7dd3fc', background: 'rgba(125,211,252,0.08)', border: '1px solid rgba(125,211,252,0.15)', padding: '2px 10px', borderRadius: '10px' }}>
