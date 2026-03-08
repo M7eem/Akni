@@ -70,6 +70,109 @@ const LoadingScreen = ({ status }: { status: Status }) => {
   );
 };
 
+const PreviewSection = () => {
+  const [activeCard, setActiveCard] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveCard((prev) => (prev + 1) % 3);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const cards = [
+    {
+      type: 'Basic Q&A',
+      content: (
+        <>
+          <div style={{ fontSize: '18px', color: '#eef6ff', marginBottom: '20px', lineHeight: 1.5 }}>What is the mechanism of action of beta blockers?</div>
+          <div style={{ height: '1px', background: 'rgba(125, 211, 252, 0.1)', marginBottom: '20px' }} />
+          <div style={{ fontSize: '16px', color: '#8899aa', lineHeight: 1.5 }}>They competitively block beta-adrenergic receptors, reducing heart rate, myocardial contractility, and blood pressure.</div>
+        </>
+      )
+    },
+    {
+      type: 'Cloze Deletion',
+      content: (
+        <div style={{ fontSize: '18px', color: '#eef6ff', lineHeight: 1.6 }}>
+          The <span style={{ color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>[sinoatrial node]</span> is the primary pacemaker of the heart.
+        </div>
+      )
+    },
+    {
+      type: 'Image Occlusion',
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <div style={{ width: '100%', height: '160px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px dashed rgba(125,211,252,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+            <ImageIcon size={32} color="rgba(125,211,252,0.4)" />
+            {/* Mock occlusion boxes */}
+            <div style={{ position: 'absolute', top: '30%', left: '20%', width: '60px', height: '24px', background: '#eab308', borderRadius: '4px' }} />
+            <div style={{ position: 'absolute', top: '60%', right: '25%', width: '80px', height: '24px', background: '#ef4444', borderRadius: '4px' }} />
+          </div>
+          <div style={{ fontSize: '14px', color: '#8899aa' }}>Identify the highlighted structures</div>
+        </div>
+      )
+    }
+  ];
+
+  return (
+    <section className="section" id="preview">
+      <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
+        <div className="section-tag">See it in action</div>
+        <div className="section-h">Flashcards that actually test understanding</div>
+      </motion.div>
+      
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.1 }}
+        style={{ width: '100%', maxWidth: '600px', margin: '40px auto 0' }}
+      >
+        <div style={{ 
+          background: '#0f1420', 
+          border: '1px solid #1a2235', 
+          borderRadius: '24px', 
+          padding: '40px',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+          position: 'relative',
+          minHeight: '280px',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeCard}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4 }}
+              style={{ flex: 1 }}
+            >
+              <div style={{ fontSize: '12px', fontWeight: 600, color: '#7dd3fc', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '24px' }}>
+                {cards[activeCard].type}
+              </div>
+              {cards[activeCard].content}
+            </motion.div>
+          </AnimatePresence>
+
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '32px' }}>
+            {cards.map((_, i) => (
+              <div 
+                key={i} 
+                style={{ 
+                  width: '8px', 
+                  height: '8px', 
+                  borderRadius: '50%', 
+                  background: i === activeCard ? '#7dd3fc' : 'rgba(125,211,252,0.2)',
+                  transition: 'background 0.3s ease'
+                }} 
+              />
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </section>
+  );
+};
+
 export default function HomePage() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [deckName, setDeckName] = useState('');
@@ -339,6 +442,7 @@ export default function HomePage() {
           </div>
         </a>
         <div className="nav-links flex items-center gap-6">
+          <a href="#preview">See it in action</a>
           <a href="#how">How it works</a>
           <a href="#features">Features</a>
           {!user && (
@@ -375,10 +479,7 @@ export default function HomePage() {
                   {/* ── UPLOAD FORM ── */}
             {step === 'upload' && (
               <div key="upload" className="fade-in">
-                <div className="deck-card-title">Create your deck</div>
-                <div className="deck-card-sub">Upload your lecture and we'll do the rest</div>
-
-                {files.map(f => (
+                  {files.map(f => (
                   <div key={f.id} className="file-row">
                     <div className="file-row-icon"><FileText size={16} /></div>
                     <div className="file-row-info">
@@ -398,10 +499,10 @@ export default function HomePage() {
                   onDragOver={e => e.preventDefault()}
                   style={{
                     transition: 'all 0.3s ease',
-                    maxHeight: files.length === 0 ? '200px' : '0px',
+                    maxHeight: files.length === 0 ? '250px' : '0px',
                     opacity: files.length === 0 ? 1 : 0,
                     overflow: 'hidden',
-                    padding: files.length === 0 ? '32px 20px' : '0px 20px',
+                    padding: files.length === 0 ? '48px 20px' : '0px 20px',
                     borderWidth: files.length === 0 ? '1.5px' : '0px',
                     marginBottom: files.length === 0 ? '18px' : '0px'
                   }}
@@ -409,8 +510,9 @@ export default function HomePage() {
                   <div className="upload-zone-icon">
                     <Upload size={22} />
                   </div>
-                  <h3>Select your lecture file</h3>
-                  <p>or drag and drop — <span>PDF</span> or <span>PPTX</span></p>
+                  <h3>Drag & drop your lecture or book here</h3>
+                  <p>or click to upload</p>
+                  <p style={{ fontSize: '12px', color: '#8899aa', marginTop: '8px' }}>Max file size: 50MB. Supports up to 100 pages.</p>
                 </div>
 
                 <div
@@ -447,6 +549,9 @@ export default function HomePage() {
                     value={deckName}
                     onChange={e => setDeckName(e.target.value)}
                   />
+                  <div style={{ fontSize: '12px', color: '#8899aa', marginTop: '6px' }}>
+                    This will be the name of the deck inside Anki.
+                  </div>
                 </div>
 
                 <div className="field">
@@ -484,7 +589,7 @@ export default function HomePage() {
                   ) : !user && localStorage.getItem('guestDeckUsed') === 'true' ? (
                     <>Sign in to Generate <ArrowRight size={18} /></>
                   ) : (
-                    <>Generate My Deck <ArrowRight size={18} /></>
+                    <>Generate Anki Deck <ArrowRight size={18} /></>
                   )}
                 </button>
 
@@ -653,6 +758,10 @@ export default function HomePage() {
               />
             )}
       </section>
+
+      <div className="rule"></div>
+
+      <PreviewSection />
 
       <div className="rule"></div>
 

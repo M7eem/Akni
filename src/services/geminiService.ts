@@ -21,8 +21,8 @@ async function generateWithClient(
   deckName: string,
   cardTypes: string[]
 ) {
-  const modelPass1 = 'gemini-3-flash-preview'; // Flash — bulk generation, cost efficient
-  const modelPass2 = 'gemini-3.1-pro-preview';   // Pro — gap audit, nuanced reasoning
+  const modelPass1 = 'gemini-3-flash-preview';    // Flash — bulk generation, cost efficient
+  const modelPass2 = 'gemini-3.1-pro-preview';    // Pro — gap audit, nuanced reasoning
 
   // ─────────────────────────────────────────────
   // PASS 1 PROMPT — full generation
@@ -31,6 +31,14 @@ async function generateWithClient(
 You are a world-class medical education specialist and board exam question writer with 20 years of experience creating high-yield study material for medical students, residents, and fellows across all specialties.
 
 Your job is to convert ANY medical source into the highest-yield Anki flashcard deck possible — the kind that makes a learner score in the top 10% on their exam, pass their boards, or perform better at the bedside.
+
+IMPORTANT — IMAGES:
+You will receive the actual images from the source attached to this message. Each image is labeled with its filename. When generating image cards:
+- You can SEE the images — describe what is actually visible in them
+- Only reference an image filename if you have actually seen that image
+- The image card front should ask the learner to interpret something specific that IS visible in the image
+- The image card back should describe what the image shows and why it matters clinically
+- Never invent or guess image content — only describe what you can see
 
 ════════════════════════════════════════════════════════════
 STEP 1 — DETECT THE SOURCE
@@ -199,20 +207,22 @@ UNIVERSAL RULES FOR ALL SOURCE TYPES
 BASIC CARDS
 Front: forces thinking, reasoning, and connection — never pure recall
 Back: complete answer with mechanism + reason + clinical consequence
+Use your own medical knowledge to add essential context not explicitly stated in the source, so every card back is fully self-contained and answerable without the original material.
 JSON type: "basic"
 
 CLOZE CARDS
 Use standard Anki cloze syntax: {{c1::hidden text}}
 Only use c1. Never c2, c3, or higher.
-Hide only the single most high-yield word or phrase.
+Hide only the single most high-yield word or phrase. If the term is ambiguous, add a hint: {{c1::answer::hint}}
 Back: explain WHY that answer is correct.
+A learner should never need to refer back to the source to understand a card's answer.
 JSON type: "cloze"
 
 IMAGE CARDS
-Only use images from the available images list — never invent filenames.
-Front: question requiring interpretation of the image.
-Back: what the image shows + why it matters clinically.
-JSON type: "basic", image field: exact filename string.
+Only generate image cards for images you can actually see attached to this message.
+Front: ask the learner to interpret something specific that is visible in the image.
+Back: describe exactly what the image shows + why it matters clinically.
+JSON type: "basic", image field: exact filename string as labeled.
 
 NEVER write for any source type:
 - "What is X?" / "Name the..." / "Define X"
@@ -257,6 +267,7 @@ STEP 5 — FORMATTING RULES
 - No emoji, no bullet points inside cards
 - Never start a front with "What is", "Define", or "Name"
 - Numbers must always include their unit and clinical context
+- When a well-known mnemonic exists for the concept, include it at the end of the back in italics using <i> tags
 
 ════════════════════════════════════════════════════════════
 STEP 6 — STRICTLY FORBIDDEN
@@ -268,13 +279,13 @@ STEP 6 — STRICTLY FORBIDDEN
 - Padding cards
 - Splitting one concept into multiple thin cards
 - Using c2 or higher in cloze cards
-- Inventing image filenames
+- Generating image cards for images you have NOT seen attached to this message
 
 ════════════════════════════════════════════════════════════
 STEP 7 — COMPREHENSIVENESS AUDIT
 ════════════════════════════════════════════════════════════
 
-Before returning JSON, verify:
+Before returning JSON, scroll back to the beginning of the source and verify the first 25% of the material has adequate card coverage — early content is most commonly missed.
 
 COVERAGE AUDIT:
 □ Every core concept → at least one mechanism-based card
@@ -286,7 +297,8 @@ COVERAGE AUDIT:
 □ Every number, threshold, or value → a cloze card with clinical context
 □ Every named sign, syndrome, eponym, or trial → in at least one card
 □ Every classic or atypical presentation → a clinical reasoning card
-□ Every image in the available images list → at least one image card if clinically relevant
+□ Every image you can see attached → at least one image card if clinically relevant
+□ Every heading or slide title in the source → at least one card
 
 EXAM TRAP AUDIT:
 □ What do learners commonly confuse about this?
@@ -309,7 +321,7 @@ OUTPUT FORMAT
 ════════════════════════════════════════════════════════════
 
 Return a JSON array only. No preamble, no explanation, no markdown fences.
-image is null for text-only cards, or exact filename string for image cards.
+image is null for text-only cards, or exact filename string for image cards you have seen.
 `;
 
   // ─────────────────────────────────────────────
@@ -319,7 +331,7 @@ image is null for text-only cards, or exact filename string for image cards.
 You are a medical education specialist doing a coverage audit on an Anki flashcard deck.
 
 You will be given:
-1. The original source material
+1. The original source material (text + images attached)
 2. The cards already generated in Pass 1
 
 Your job is to find ONLY the concepts, mechanisms, facts, values, and clinical points from the source that have NO card covering them yet — and generate cards for those gaps only.
@@ -336,7 +348,7 @@ RULES:
   → Only c1 in cloze cards
   → Bold key terms with <b>tags</b>
   → Use <br> for line breaks
-  → image is null unless using an exact filename from the available images list
+  → Only generate image cards for images you can actually see attached to this message
 
 WHAT TO LOOK FOR — common gaps:
 - Specific numbers, thresholds, or values mentioned in the source with no cloze card
@@ -344,7 +356,7 @@ WHAT TO LOOK FOR — common gaps:
 - Complications or consequences described but skipped
 - Comparisons or distinctions the source makes that have no distinction card
 - Exam traps or misconceptions embedded in the source text
-- Any image in the available images list not yet used in a card
+- Any attached image not yet used in a card
 
 If there are NO gaps — return an empty array: []
 If there ARE gaps — return only the new cards as a JSON array.
@@ -355,19 +367,49 @@ Return a JSON array only. No preamble, no explanation, no markdown fences.
 
   const imageFilenames = Object.keys(images);
   const imageListText = imageFilenames.length > 0
-    ? `Available images in this source: ${imageFilenames.join(', ')}`
+    ? `Available images in this source (attached below): ${imageFilenames.join(', ')}`
     : 'Available images in this source: none';
 
   const sourceText = `Deck name: ${deckName}\n\n${imageListText}\n\nSource material:\n\n${text}`;
 
+  // ─── Build image parts for API call ───
+  const imageParts = imageFilenames.map(filename => ({
+    inlineData: {
+      mimeType: 'image/jpeg' as const,
+      data: images[filename].toString('base64')
+    }
+  }));
+
+  // Label each image with its filename so Gemini knows what to reference
+  const imageLabels = imageFilenames.map(filename => ({
+    text: `[Image filename: ${filename}]`
+  }));
+
+  // Interleave label + image parts: [label, image, label, image, ...]
+  const interleavedImageParts: any[] = [];
+  imageFilenames.forEach((filename, i) => {
+    interleavedImageParts.push({ text: `[Image filename: ${filename}]` });
+    interleavedImageParts.push({
+      inlineData: {
+        mimeType: 'image/jpeg' as const,
+        data: images[filename].toString('base64')
+      }
+    });
+  });
+
+  const pass1Parts = [
+    { text: sourceText },
+    ...interleavedImageParts
+  ];
+
   // ─── PASS 1 ───
-  console.log('Gemini Pass 1: generating cards...');
+  console.log(`Gemini Pass 1: generating cards with ${imageFilenames.length} images attached...`);
   let pass1Cards: any[] = [];
 
   try {
     const pass1Response = await ai.models.generateContent({
       model: modelPass1,
-      contents: { role: 'user', parts: [{ text: sourceText }] },
+      contents: { role: 'user', parts: pass1Parts },
       config: {
         systemInstruction: pass1Prompt,
         responseMimeType: 'application/json',
@@ -403,7 +445,7 @@ Return a JSON array only. No preamble, no explanation, no markdown fences.
   let pass2Cards: any[] = [];
 
   try {
-    const pass2UserContent = `
+    const pass2TextContent = `
 ${sourceText}
 
 ────────────────────────────────────────
@@ -414,9 +456,14 @@ ${JSON.stringify(pass1Cards, null, 2)}
 Now identify any concepts, facts, values, or clinical points from the source that have NO card yet, and generate cards for those gaps only.
 `;
 
+    const pass2Parts = [
+      { text: pass2TextContent },
+      ...interleavedImageParts
+    ];
+
     const pass2Response = await ai.models.generateContent({
       model: modelPass2,
-      contents: { role: 'user', parts: [{ text: pass2UserContent }] },
+      contents: { role: 'user', parts: pass2Parts },
       config: {
         systemInstruction: pass2Prompt,
         responseMimeType: 'application/json',
@@ -443,7 +490,6 @@ Now identify any concepts, facts, values, or clinical points from the source tha
     console.log(`Pass 2 complete: ${pass2Cards.length} gap cards generated`);
 
   } catch (error) {
-    // Pass 2 failure is non-fatal — return Pass 1 cards only
     console.warn("Pass 2 failed (non-fatal), returning Pass 1 cards only:", error);
     return pass1Cards;
   }
