@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 export interface DetectedLabel {
   id?: string;
@@ -50,26 +50,48 @@ export async function detectLabelsForImage(
           }
         },
         {
-          text: `You are analyzing a medical or anatomy diagram.
-Your job is to find text labels that are connected to specific structures by lines or arrows.
+          text: `You are an expert medical illustrator and anatomist. Your task is to precisely detect and locate ALL anatomical text labels in this diagram.
 
-STRICT RULES:
-- ONLY include labels that have a visible connecting line or arrow pointing to a structure
-- The bounding box must tightly wrap the text only — not the line or arrow
-- IGNORE: titles, headings, captions, page numbers, slide numbers, copyright text, watermarks, single digits, any text not connected by a line
-- If a label has a line going from the text to a structure, include it
-- Coordinates must be precise — x,y is the top-left corner of the text, w,h wraps only the text
+STRICT INCLUSION RULES:
+1. Include EVERY text label that points to a structure via a line, arrow, or bracket.
+2. Include both short labels (e.g., "Vermis") and multi-line labels.
+3. If a label is inside a box or bubble, include the text.
 
-Return ONLY a valid JSON array, nothing else:
-[{ "label": "text", "x": 0.12, "y": 0.35, "w": 0.18, "h": 0.045 }]
-Coordinates are fractions of image dimensions (0.0 to 1.0).
-If no labels found, return [].`
+STRICT EXCLUSION RULES:
+1. DO NOT include the main title, figure numbers (e.g., "Fig 1.2"), or captions describing the whole image.
+2. DO NOT include copyright text, watermarks, scale bars, or logos.
+3. DO NOT include single letters (e.g., "A", "B") unless they are clearly anatomical abbreviations.
+
+BOUNDING BOX RULES (CRITICAL FOR ACCURACY):
+1. The bounding box MUST tightly wrap the text characters ONLY.
+2. DO NOT include the pointing line, arrow, or bracket in the bounding box.
+3. DO NOT include excessive whitespace around the text.
+4. For multi-line labels, the box must cover all lines of the text.
+5. Coordinates (x, y, w, h) must be precise fractions of the full image dimensions (0.000 to 1.000).
+6. x = left edge of the text, y = top edge of the text, w = width of the text, h = height of the text.`
         }
       ]
+    },
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            label: { type: Type.STRING, description: "The text of the label" },
+            x: { type: Type.NUMBER, description: "X coordinate of top-left corner (0.0 to 1.0)" },
+            y: { type: Type.NUMBER, description: "Y coordinate of top-left corner (0.0 to 1.0)" },
+            w: { type: Type.NUMBER, description: "Width of the bounding box (0.0 to 1.0)" },
+            h: { type: Type.NUMBER, description: "Height of the bounding box (0.0 to 1.0)" }
+          },
+          required: ["label", "x", "y", "w", "h"]
+        }
+      }
     }
   });
 
-  const raw = response.text?.replace(/```json|```/g, '').trim() || '[]';
+  const raw = response.text?.trim() || '[]';
   const labels: DetectedLabel[] = JSON.parse(raw);
 
   return labels.map((l, i) => ({ ...l, id: Date.now().toString() + i }));
@@ -88,30 +110,57 @@ export async function generateOcclusionCardsFromLabels(
   const height = metadata.height!;
 
   const baseName = imageName.replace(/\.[^.]+$/, ''); // strip any extension
-  const backImageName = `occl_${baseName}_back.png`;
 
   for (let i = 0; i < labels.length; i++) {
     const labelData = labels[i];
 
     try {
       const pad = 0.008; // 0.8% of image dimensions as padding
-      const px = Math.max(0, Math.floor((labelData.x - pad) * width));
-      const py = Math.max(0, Math.floor((labelData.y - pad) * height));
-      const pw = Math.min(width - px, Math.floor((labelData.w + pad * 2) * width));
-      const ph = Math.min(height - py, Math.floor((labelData.h + pad * 2) * height));
+      
+      let frontSvgRects = '';
+      let backSvgRects = '';
+      
+      for (let j = 0; j < labels.length; j++) {
+        const l = labels[j];
+        const px = Math.max(0, Math.floor((l.x - pad) * width));
+        const py = Math.max(0, Math.floor((l.y - pad) * height));
+        const pw = Math.min(width - px, Math.floor((l.w + pad * 2) * width));
+        const ph = Math.min(height - py, Math.floor((l.h + pad * 2) * height));
+        
+        if (i === j) {
+          // Target label - red box on front, NO box on back
+          frontSvgRects += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#e74c3c" rx="4"/>`;
+        } else {
+          // Other labels - yellow box on front AND back
+          frontSvgRects += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#f1c40f" rx="4"/>`;
+          backSvgRects += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#f1c40f" rx="4"/>`;
+        }
+      }
 
-      const overlay = Buffer.from(
+      const frontOverlay = Buffer.from(
         `<svg width="${width}" height="${height}">
-          <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#e74c3c" rx="4"/>
+          ${frontSvgRects}
+        </svg>`
+      );
+      
+      const backOverlay = Buffer.from(
+        `<svg width="${width}" height="${height}">
+          ${backSvgRects}
         </svg>`
       );
 
       const frontBuffer = await sharp(imageBuffer)
-        .composite([{ input: overlay, blend: 'over' }])
+        .composite([{ input: frontOverlay, blend: 'over' }])
+        .png()
+        .toBuffer();
+        
+      const backBuffer = await sharp(imageBuffer)
+        .composite([{ input: backOverlay, blend: 'over' }])
         .png()
         .toBuffer();
 
       const frontImageName = `occl_${baseName}_label_${i}_front.png`;
+      const backImageName = `occl_${baseName}_label_${i}_back.png`;
 
       allCards.push({
         front: `<img src="${frontImageName}"><br><br>What structure is hidden by the <b>red box</b>?`,
@@ -119,7 +168,7 @@ export async function generateOcclusionCardsFromLabels(
         frontImageName,
         frontImageBuffer: frontBuffer,
         backImageName,
-        backImageBuffer: imageBuffer
+        backImageBuffer: backBuffer
       });
 
     } catch (labelErr) {
@@ -143,7 +192,7 @@ export async function generateOcclusionCards(
       const mimeType = detectMimeType(imageBuffer);
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.1-pro-preview',
         contents: {
           role: 'user',
           parts: [
@@ -154,45 +203,48 @@ export async function generateOcclusionCards(
               }
             },
             {
-              text: `You are analyzing a medical or anatomy diagram to find text labels for image occlusion flashcards.
+              text: `You are an expert medical illustrator and anatomist. Your task is to precisely detect and locate ALL anatomical text labels in this diagram for image occlusion flashcards.
 
-WHAT TO INCLUDE:
-- Every visible text label that names an anatomical structure
-- Labels connected to a structure by a line, arrow, or pointer
-- Both short labels (e.g. "Vermis") and multi-line labels (e.g. "Spinocerebellum")
+STRICT INCLUSION RULES:
+1. Include EVERY text label that points to a structure via a line, arrow, or bracket.
+2. Include both short labels (e.g., "Vermis") and multi-line labels.
+3. If a label is inside a box or bubble, include the text.
 
-WHAT TO EXCLUDE:
-- Slide numbers, page numbers, single digits or letters
-- Copyright text, watermarks, scale bars, logos
-- Titles, headings, or captions that describe the whole image
-- Any text that is decorative or not labeling a specific structure
+STRICT EXCLUSION RULES:
+1. DO NOT include the main title, figure numbers (e.g., "Fig 1.2"), or captions describing the whole image.
+2. DO NOT include copyright text, watermarks, scale bars, or logos.
+3. DO NOT include single letters (e.g., "A", "B") unless they are clearly anatomical abbreviations.
 
-BOUNDING BOX RULES — this is critical:
-- x, y, w, h must be as TIGHT as possible around the text characters only
-- x = left edge of the FIRST character, NOT the start of a pointing line
-- y = top edge of the FIRST character, NOT above it
-- w = width from first to last character of the longest line only
-- h = total height of all lines of text for multi-line labels
-- Do NOT include whitespace, arrows, lines, or surrounding space in the box
-- For multi-line labels, cover all lines in a single box
-- Coordinates are fractions of the full image dimensions (0.0 to 1.0)
-- Be precise to 3 decimal places
-
-Return ONLY a valid JSON array. No markdown fences, no explanation, no preamble.
-
-Format:
-[
-  { "label": "Spinocerebellum", "x": 0.423, "y": 0.041, "w": 0.198, "h": 0.048 },
-  { "label": "Vermis", "x": 0.751, "y": 0.098, "w": 0.072, "h": 0.042 }
-]
-
-If no anatomical labels are present, return [].`
+BOUNDING BOX RULES (CRITICAL FOR ACCURACY):
+1. The bounding box MUST tightly wrap the text characters ONLY.
+2. DO NOT include the pointing line, arrow, or bracket in the bounding box.
+3. DO NOT include excessive whitespace around the text.
+4. For multi-line labels, the box must cover all lines of the text.
+5. Coordinates (x, y, w, h) must be precise fractions of the full image dimensions (0.000 to 1.000).
+6. x = left edge of the text, y = top edge of the text, w = width of the text, h = height of the text.`
             }
           ]
+        },
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                label: { type: Type.STRING, description: "The text of the label" },
+                x: { type: Type.NUMBER, description: "X coordinate of top-left corner (0.0 to 1.0)" },
+                y: { type: Type.NUMBER, description: "Y coordinate of top-left corner (0.0 to 1.0)" },
+                w: { type: Type.NUMBER, description: "Width of the bounding box (0.0 to 1.0)" },
+                h: { type: Type.NUMBER, description: "Height of the bounding box (0.0 to 1.0)" }
+              },
+              required: ["label", "x", "y", "w", "h"]
+            }
+          }
         }
       });
 
-      const raw = response.text?.replace(/```json|```/g, '').trim() || '[]';
+      const raw = response.text?.trim() || '[]';
       const labels: DetectedLabel[] = JSON.parse(raw);
 
       if (labels.length === 0) continue;
@@ -202,30 +254,57 @@ If no anatomical labels are present, return [].`
       const height = metadata.height!;
 
       const baseName = imageName.replace(/\.[^.]+$/, '');
-      const backImageName = `occl_${baseName}_back.png`;
 
       for (let i = 0; i < labels.length; i++) {
         const labelData = labels[i];
 
         try {
           const pad = 0.008; // 0.8% of image dimensions as padding
-          const px = Math.max(0, Math.floor((labelData.x - pad) * width));
-          const py = Math.max(0, Math.floor((labelData.y - pad) * height));
-          const pw = Math.min(width - px, Math.floor((labelData.w + pad * 2) * width));
-          const ph = Math.min(height - py, Math.floor((labelData.h + pad * 2) * height));
+          
+          let frontSvgRects = '';
+          let backSvgRects = '';
+          
+          for (let j = 0; j < labels.length; j++) {
+            const l = labels[j];
+            const px = Math.max(0, Math.floor((l.x - pad) * width));
+            const py = Math.max(0, Math.floor((l.y - pad) * height));
+            const pw = Math.min(width - px, Math.floor((l.w + pad * 2) * width));
+            const ph = Math.min(height - py, Math.floor((l.h + pad * 2) * height));
+            
+            if (i === j) {
+              // Target label - red box on front, NO box on back
+              frontSvgRects += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#e74c3c" rx="3"/>`;
+            } else {
+              // Other labels - yellow box on front AND back
+              frontSvgRects += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#f1c40f" rx="3"/>`;
+              backSvgRects += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#f1c40f" rx="3"/>`;
+            }
+          }
 
-          const overlay = Buffer.from(
+          const frontOverlay = Buffer.from(
             `<svg width="${width}" height="${height}">
-              <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#e74c3c" rx="3"/>
+              ${frontSvgRects}
+            </svg>`
+          );
+          
+          const backOverlay = Buffer.from(
+            `<svg width="${width}" height="${height}">
+              ${backSvgRects}
             </svg>`
           );
 
           const frontBuffer = await sharp(imageBuffer)
-            .composite([{ input: overlay, blend: 'over' }])
+            .composite([{ input: frontOverlay, blend: 'over' }])
+            .png()
+            .toBuffer();
+            
+          const backBuffer = await sharp(imageBuffer)
+            .composite([{ input: backOverlay, blend: 'over' }])
             .png()
             .toBuffer();
 
           const frontImageName = `occl_${baseName}_label_${i}_front.png`;
+          const backImageName = `occl_${baseName}_label_${i}_back.png`;
 
           allCards.push({
             front: `<img src="${frontImageName}"><br><br>What structure is hidden by the <b>red box</b>?`,
@@ -233,7 +312,7 @@ If no anatomical labels are present, return [].`
             frontImageName,
             frontImageBuffer: frontBuffer,
             backImageName,
-            backImageBuffer: imageBuffer
+            backImageBuffer: backBuffer
           });
 
         } catch (labelErr) {

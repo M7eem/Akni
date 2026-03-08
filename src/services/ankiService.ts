@@ -239,6 +239,9 @@ print(f"DB created: {len(cards)} cards")
   const imgPattern = /src="([^"]+\.(png|jpg|jpeg|gif|webp))"/gi;
 
   for (const card of allCards) {
+    if (card.image) {
+      referencedImages.add(card.image);
+    }
     const fields = [card.front, card.back];
     for (const field of fields) {
       if (!field) continue;
