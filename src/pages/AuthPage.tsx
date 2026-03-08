@@ -7,7 +7,8 @@ import {
   updateProfile,
   sendPasswordResetEmail,
 } from "firebase/auth";
-import { auth } from "../lib/firebase";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
@@ -17,7 +18,7 @@ const googleProvider = new GoogleAuthProvider();
 type Mode = "signin" | "signup" | "forgot";
 
 export default function AuthPage() {
-  const { user } = useAuth();
+  const { user, signInWithGoogle, setUsage } = useAuth();
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<Mode>("signin");
@@ -37,7 +38,7 @@ export default function AuthPage() {
     setError("");
     setLoading(true);
     try {
-      await signInWithPopup(auth, googleProvider);
+      await signInWithGoogle();
     } catch (e: any) {
       setError(friendlyError(e.code));
       setLoading(false);
@@ -76,6 +77,25 @@ export default function AuthPage() {
       if (mode === "signup") {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         if (name) await updateProfile(cred.user, { displayName: name });
+        
+        // Create user document in Firestore
+        const userRef = doc(db, 'users', cred.user.uid);
+        const docSnap = await getDoc(userRef);
+        
+        if (!docSnap.exists()) {
+          await setDoc(userRef, {
+            email: cred.user.email,
+            displayName: name || cred.user.displayName,
+            isAdmin: false,
+            decksUsedThisMonth: 0,
+            createdAt: serverTimestamp(),
+            lastLogin: serverTimestamp(),
+            periodStart: serverTimestamp()
+          });
+          // Update local usage state for new user
+          const now = new Date();
+          setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
+        }
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
