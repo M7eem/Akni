@@ -38,7 +38,6 @@ ANY card type not in this list is STRICTLY FORBIDDEN and must not appear in your
 ${noBasicRule}
 ${noClozeRule}
 This restriction is absolute and cannot be overridden by any other instruction in this prompt.
-Image occlusion cards use type "basic" — only include them if "basic" is in the allowed list.
 `;
 
   const pass1Prompt = `
@@ -47,14 +46,6 @@ You are a world-class medical education specialist and board exam question write
 Your job is to convert ANY medical source into the highest-yield Anki flashcard deck possible — the kind that makes a learner score in the top 10% on their exam, pass their boards, or perform better at the bedside.
 
 ${cardTypeRestriction}
-
-IMPORTANT — IMAGES:
-You will receive the actual images from the source attached to this message. Each image is labeled with its filename. When generating image cards:
-- You can SEE the images — describe what is actually visible in them
-- Only reference an image filename if you have actually seen that image
-- The image card front should ask the learner to interpret something specific that IS visible in the image
-- The image card back should describe what the image shows and why it matters clinically
-- Never invent or guess image content — only describe what you can see
 
 ════════════════════════════════════════════════════════════
 STEP 1 — DETECT THE SOURCE
@@ -233,26 +224,17 @@ UNIVERSAL RULES FOR ALL SOURCE TYPES
 
 BASIC CARDS
 Front: forces thinking, reasoning, and connection — never pure recall
-Back (the "back" field): the direct concise answer — 1-3 sentences maximum
-Extra (the "extra" field): the full mechanism, clinical consequence, distinguishing features, and mnemonic if one exists
-Use your own medical knowledge to add essential context not in the source, so every card is fully self-contained.
+Back: complete answer with mechanism + reason + clinical consequence
+Use your own medical knowledge to add essential context not explicitly stated in the source, so every card back is fully self-contained and answerable without the original material.
 JSON type: "basic"
 
 CLOZE CARDS
 Use standard Anki cloze syntax: {{c1::hidden text}}
 Only use c1. Never c2, c3, or higher.
 Hide only the single most high-yield word or phrase. If the term is ambiguous, add a hint: {{c1::answer::hint}}
-Back (the "back" field): direct answer — what the hidden text is
-Extra (the "extra" field): why that answer is correct — the mechanism and clinical context
-A learner should never need to refer back to the source to understand a card.
+Back: explain WHY that answer is correct.
+A learner should never need to refer back to the source to understand a card's answer.
 JSON type: "cloze"
-
-IMAGE CARDS
-Only generate image cards for images you can actually see attached to this message.
-Front: ask the learner to interpret something specific that is visible in the image.
-Back (the "back" field): the direct answer — what the image shows
-Extra (the "extra" field): why it matters clinically and how to distinguish from similar findings
-JSON type: "basic", image field: exact filename string as labeled.
 
 NEVER write for any source type:
 - "What is X?" / "Name the..." / "Define X"
@@ -270,7 +252,7 @@ Each card must cover the FULL picture of one concept:
 → How to distinguish it from something similar
 
 Never split one concept across multiple thin cards.
-A student who reads the BACK + EXTRA of every card should deeply understand the entire topic.
+A student who reads only the BACK of every card should deeply understand the entire topic.
 
 ════════════════════════════════════════════════════════════
 STEP 4 — WHAT EXAMINERS ACTUALLY TEST
@@ -305,7 +287,7 @@ STEP 5 — FORMATTING RULES
 - No emoji, no bullet points inside cards
 - Never start a front with "What is", "Define", or "Name"
 - Numbers must always include their unit and clinical context
-- When a well-known mnemonic exists for the concept, include it at the end of the extra field in italics using <i> tags
+- When a well-known mnemonic exists for the concept, include it at the end of the back in italics using <i> tags
 
 ════════════════════════════════════════════════════════════
 STEP 6 — STRICTLY FORBIDDEN
@@ -316,8 +298,6 @@ STEP 6 — STRICTLY FORBIDDEN
 - One-word or one-sentence backs
 - Padding cards
 - Splitting one concept into multiple thin cards
-- Using c2 or higher in cloze cards
-- Generating image cards for images you have NOT seen attached to this message
 - Generating any card type not listed in the STRICT CARD TYPE RESTRICTION
 
 ════════════════════════════════════════════════════════════
@@ -336,7 +316,6 @@ COVERAGE AUDIT:
 □ Every number, threshold, or value → a cloze card with clinical context (only if cloze is allowed)
 □ Every named sign, syndrome, eponym, or trial → in at least one card
 □ Every classic or atypical presentation → a clinical reasoning card
-□ Every image you can see attached → at least one image card if clinically relevant (only if basic is allowed)
 □ Every heading or slide title in the source → at least one card
 
 EXAM TRAP AUDIT:
@@ -347,8 +326,9 @@ EXAM TRAP AUDIT:
 Generate at least one card per trap identified.
 
 DEPTH AUDIT — for every card:
-□ Does the back give a direct concise answer?
-□ Does the extra field explain WHY with mechanism and clinical consequence?
+□ Does the back explain WHY, not just WHAT?
+□ Is there a mechanism?
+□ Is there a clinical consequence?
 □ Would a learner answering a vignette about this pass based only on this card?
 If any card fails — rewrite it before returning.
 
@@ -359,16 +339,13 @@ OUTPUT FORMAT
 ════════════════════════════════════════════════════════════
 
 Return a JSON array only. No preamble, no explanation, no markdown fences.
-Each object must have: type, front, back, extra, image.
-image is null for text-only cards, or exact filename string for image cards you have seen.
-extra is always a non-empty string containing the deeper explanation, mechanism, and mnemonic if applicable.
 `;
 
   const pass2Prompt = `
 You are a medical education specialist doing a coverage audit on an Anki flashcard deck.
 
 You will be given:
-1. The original source material (text + images attached)
+1. The original source material
 2. The cards already generated in Pass 1
 
 Your job is to find ONLY the concepts, mechanisms, facts, values, and clinical points from the source that have NO card covering them yet — and generate cards for those gaps only.
@@ -382,8 +359,7 @@ RULES:
 - Do NOT duplicate any existing card even partially
 - Only generate cards for genuine gaps — concepts present in the source with zero coverage
 - Apply the exact same quality rules as Pass 1:
-  → Direct concise answer in the "back" field (1-3 sentences)
-  → Full mechanism and clinical context in the "extra" field
+  → Full mechanism in every back
   → No one-sentence backs
   → No definition-only cards
   → No "What is X?" fronts
@@ -391,7 +367,6 @@ RULES:
   → Only c1 in cloze cards
   → Bold key terms with <b>tags</b>
   → Use <br> for line breaks
-  → Only generate image cards for images you can actually see attached
 
 WHAT TO LOOK FOR — common gaps:
 - Specific numbers, thresholds, or values with no cloze card
@@ -399,7 +374,6 @@ WHAT TO LOOK FOR — common gaps:
 - Complications or consequences that were skipped
 - Comparisons the source makes that have no distinction card
 - Exam traps or misconceptions embedded in the source
-- Any attached image not yet used in a card
 - Content from the first 25% of the source that was under-covered
 
 If there are NO gaps — return an empty array: []
@@ -407,31 +381,12 @@ If there ARE gaps — return only the new cards as a JSON array.
 
 OUTPUT FORMAT:
 Return a JSON array only. No preamble, no explanation, no markdown fences.
-Each object must have: type, front, back, extra, image.
 `;
 
-  const imageFilenames = Object.keys(images);
-  const imageListText = imageFilenames.length > 0
-    ? `Available images in this source (attached below): ${imageFilenames.join(', ')}`
-    : 'Available images in this source: none';
-
-  const sourceText = `Deck name: ${deckName}\n\n${imageListText}\n\nSource material:\n\n${text}`;
-
-  // ─── Build interleaved image parts ───
-  const interleavedImageParts: any[] = [];
-  imageFilenames.forEach((filename) => {
-    interleavedImageParts.push({ text: `[Image filename: ${filename}]` });
-    interleavedImageParts.push({
-      inlineData: {
-        mimeType: 'image/jpeg' as const,
-        data: images[filename].toString('base64')
-      }
-    });
-  });
+  const sourceText = `Deck name: ${deckName}\n\nSource material:\n\n${text}`;
 
   const pass1Parts = [
-    { text: sourceText },
-    ...interleavedImageParts
+    { text: sourceText }
   ];
 
   const cardSchema = {
@@ -441,16 +396,14 @@ Each object must have: type, front, back, extra, image.
       properties: {
         type:  { type: Type.STRING },
         front: { type: Type.STRING },
-        back:  { type: Type.STRING },
-        extra: { type: Type.STRING },
-        image: { type: Type.STRING }
+        back:  { type: Type.STRING }
       },
-      required: ['type', 'front', 'back', 'extra']
+      required: ['type', 'front', 'back']
     }
   };
 
   // ─── PASS 1 ───
-  console.log(`Gemini Pass 1: generating cards with ${imageFilenames.length} images attached...`);
+  console.log(`Gemini Pass 1: generating cards...`);
   let pass1Cards: any[] = [];
 
   try {
@@ -492,8 +445,7 @@ Now identify any concepts, facts, values, or clinical points from the source tha
 `;
 
     const pass2Parts = [
-      { text: pass2TextContent },
-      ...interleavedImageParts
+      { text: pass2TextContent }
     ];
 
     const pass2Response = await ai.models.generateContent({

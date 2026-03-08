@@ -7,7 +7,6 @@ import { execSync } from 'child_process';
 interface Card {
   front: string;
   back: string;
-  extra?: string;
   image?: string;
 }
 
@@ -37,7 +36,6 @@ export async function createAnkiPackage(
   const occlusionAsCards: Card[] = occlusionCards.map(oc => ({
     front: oc.front,
     back: oc.back,
-    extra: '',
     type: 'basic'
   } as any));
 
@@ -48,7 +46,6 @@ export async function createAnkiPackage(
     type: (card as any).type || 'basic',
     front: card.front,
     back: card.back,
-    extra: card.extra || '',
     image: (card.image && images && images[card.image]) ? card.image : null
   }));
 
@@ -111,19 +108,18 @@ deck_id = random.randint(1000000000, 9999999999)
 model_id_basic = random.randint(1000000000, 9999999999)
 model_id_cloze = random.randint(1000000000, 9999999999)
 
-css = """.card{font-family:Arial,sans-serif;font-size:20px;text-align:center;color:#e8e8e8;background-color:#2b2b2b;padding:0 60px 20px 60px;line-height:1.8}b{color:#7dd8f8;font-weight:bold}hr#answer{border:none;border-top:1px solid #555;margin:16px 0}.cloze{font-weight:bold;color:#7dd8f8}.extra{font-size:15px;color:#aab8c8;margin-top:16px;text-align:left;border-top:1px solid #444;padding-top:12px;line-height:1.7}"""
+css = """.card{font-family:Arial,sans-serif;font-size:20px;text-align:center;color:#e8e8e8;background-color:#2b2b2b;padding:0 60px 20px 60px;line-height:1.8}b{color:#7dd8f8;font-weight:bold}hr#answer{border:none;border-top:1px solid #555;margin:16px 0}.cloze{font-weight:bold;color:#7dd8f8}"""
 
 basic_model = {
     "id": model_id_basic, "name": "Basic", "type": 0, "mod": now, "usn": -1,
     "sortf": 0, "did": deck_id,
     "tmpls": [{"name": "Card 1", "ord": 0,
                "qfmt": "{{Front}}",
-               "afmt": "{{Front}}<hr id=answer>{{Back}}{{#Extra}}<div class=extra>{{Extra}}</div>{{/Extra}}",
+               "afmt": "{{Front}}<hr id=answer>{{Back}}",
                "bqfmt": "", "bafmt": "", "did": None, "bfont": "", "bsize": 0}],
     "flds": [
         {"name": "Front", "ord": 0, "sticky": False, "rtl": False, "font": "Arial", "size": 20},
-        {"name": "Back",  "ord": 1, "sticky": False, "rtl": False, "font": "Arial", "size": 20},
-        {"name": "Extra", "ord": 2, "sticky": False, "rtl": False, "font": "Arial", "size": 20}
+        {"name": "Back",  "ord": 1, "sticky": False, "rtl": False, "font": "Arial", "size": 20}
     ],
     "css": css, "latexPre": "", "latexPost": "", "tags": [], "vers": []
 }
@@ -133,12 +129,11 @@ cloze_model = {
     "sortf": 0, "did": deck_id,
     "tmpls": [{"name": "Cloze", "ord": 0,
                "qfmt": "{{cloze:Text}}",
-               "afmt": "{{cloze:Text}}<hr id=answer>{{Back}}{{#Extra}}<div class=extra>{{Extra}}</div>{{/Extra}}",
+               "afmt": "{{cloze:Text}}<br><br>{{Back Extra}}",
                "bqfmt": "", "bafmt": "", "did": None, "bfont": "", "bsize": 0}],
     "flds": [
         {"name": "Text",  "ord": 0, "sticky": False, "rtl": False, "font": "Arial", "size": 20},
-        {"name": "Back",  "ord": 1, "sticky": False, "rtl": False, "font": "Arial", "size": 20},
-        {"name": "Extra", "ord": 2, "sticky": False, "rtl": False, "font": "Arial", "size": 20}
+        {"name": "Back Extra",  "ord": 1, "sticky": False, "rtl": False, "font": "Arial", "size": 20}
     ],
     "css": css, "latexPre": "", "latexPost": "", "tags": [], "vers": []
 }
@@ -195,13 +190,9 @@ for i, card in enumerate(cards):
 
     front = card['front']
     back = card.get('back', '')
-    extra = card.get('extra', '')
 
-    if card.get('image'):
-        front += '<br><br><img src="' + card['image'] + '">'
-
-    # Fields: Front/Text, Back, Extra
-    flds = front + "\\x1f" + back + "\\x1f" + extra
+    # Fields: Front/Text, Back
+    flds = front + "\\x1f" + back
     sfld = card['front']
     csum = int.from_bytes(sfld[:9].encode('utf-8')[:4].ljust(4, b'\\x00'), 'big')
 
@@ -250,7 +241,7 @@ print(f"DB created: {len(cards)} cards")
     if (card.image) {
       referencedImages.add(card.image);
     }
-    const fields = [card.front, card.back, card.extra || ''];
+    const fields = [card.front, card.back];
     for (const field of fields) {
       if (!field) continue;
       let match;
