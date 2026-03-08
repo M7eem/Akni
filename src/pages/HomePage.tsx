@@ -7,8 +7,9 @@ import DeckHistory from '../components/DeckHistory';
 import { useAuth } from '../contexts/AuthContext';
 import { saveDeckHistory } from '../services/firestoreService';
 import { getUsage } from '../services/deckHistoryService';
-import { signInWithRedirect, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { signInWithRedirect, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, googleProvider, db } from '../lib/firebase';
 
 interface UploadedFile {
   file: File;
@@ -89,6 +90,7 @@ export default function HomePage() {
   const [scrolled, setScrolled] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
@@ -819,12 +821,41 @@ export default function HomePage() {
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 try {
-                  await createUserWithEmailAndPassword(auth, email, password);
+                  const cred = await createUserWithEmailAndPassword(auth, email, password);
+                  if (name) await updateProfile(cred.user, { displayName: name });
+                  
+                  // Create user document in Firestore
+                  const userRef = doc(db, 'users', cred.user.uid);
+                  const docSnap = await getDoc(userRef);
+                  
+                  if (!docSnap.exists()) {
+                    await setDoc(userRef, {
+                      email: cred.user.email,
+                      displayName: name || cred.user.displayName,
+                      isAdmin: false,
+                      decksUsedThisMonth: 0,
+                      createdAt: serverTimestamp(),
+                      lastLogin: serverTimestamp(),
+                      periodStart: serverTimestamp()
+                    });
+                    // Update local usage state for new user
+                    const now = new Date();
+                    setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
+                  }
+                  
                   setShowSignUpModal(false);
                 } catch (err: any) {
                   setAuthError(err.message);
                 }
               }}>
+                <div className="field" style={{ marginBottom: '12px' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Full name (optional)" 
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                  />
+                </div>
                 <div className="field" style={{ marginBottom: '12px' }}>
                   <input 
                     type="email" 
