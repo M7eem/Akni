@@ -377,18 +377,20 @@ export default function HomePage() {
       setFileName(name);
       
       if (user) {
-        // Optimistic update
-        setUsage(prev => prev ? { ...prev, used: prev.used + 1 } : prev);
-        
-        saveDeckHistory(user.uid, {
-          deckName: safeName,
-          cardCount: count,
-          fileName: name
-        }).catch(console.error);
-        
-        // Background sync
-        getUsage(user.uid, true).then(setUsage).catch(console.error);
-      } else {
+  // Optimistic update
+  setUsage(prev => prev ? { ...prev, used: prev.used + 1 } : prev);
+  
+  saveDeckHistory(user.uid, {
+    deckName: safeName,
+    cardCount: count,
+    fileName: name
+  }).catch(console.error);
+  
+  // Delay background sync so Firestore has time to reflect the increment
+  setTimeout(() => {
+    getUsage(user.uid, true).then(setUsage).catch(console.error);
+  }, 2000);
+} else {
         localStorage.setItem('guestDeckUsed', 'true');
       }
 
