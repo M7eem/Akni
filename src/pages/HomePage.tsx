@@ -72,7 +72,7 @@ const LoadingScreen = ({ status }: { status: Status }) => {
 export default function HomePage() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [deckName, setDeckName] = useState('');
-  const [cardTypes, setCardTypes] = useState<string[]>(['basic', 'cloze']);
+  const [cardTypes, setCardTypes] = useState<string[]>(['basic']);
   const [status, setStatus] = useState<Status>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [downloadUrl, setDownloadUrl] = useState('');
@@ -370,13 +370,34 @@ export default function HomePage() {
                 <div className="deck-card-title">Create your deck</div>
                 <div className="deck-card-sub">Upload your lecture and we'll do the rest</div>
 
+                {files.map(f => (
+                  <div key={f.id} className="file-row">
+                    <div className="file-row-icon"><FileText size={16} /></div>
+                    <div className="file-row-info">
+                      <div className="file-row-name">{f.file.name}</div>
+                      <div className="file-row-size">{(f.file.size / 1024 / 1024).toFixed(2)} MB</div>
+                    </div>
+                    <div className="file-row-x" onClick={() => removeFile(f.id)}><X size={16} /></div>
+                  </div>
+                ))}
+
+                <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple accept=".pptx,.pdf" />
+
                 <div 
                   className="upload-zone"
                   onClick={() => fileInputRef.current?.click()}
                   onDrop={handleDrop}
                   onDragOver={e => e.preventDefault()}
+                  style={{
+                    transition: 'all 0.3s ease',
+                    maxHeight: files.length === 0 ? '200px' : '0px',
+                    opacity: files.length === 0 ? 1 : 0,
+                    overflow: 'hidden',
+                    padding: files.length === 0 ? '32px 20px' : '0px 20px',
+                    borderWidth: files.length === 0 ? '1.5px' : '0px',
+                    marginBottom: files.length === 0 ? '18px' : '0px'
+                  }}
                 >
-                  <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" multiple accept=".pptx,.pdf" />
                   <div className="upload-zone-icon">
                     <Upload size={22} />
                   </div>
@@ -384,20 +405,31 @@ export default function HomePage() {
                   <p>or drag and drop — <span>PDF</span> or <span>PPTX</span></p>
                 </div>
 
-                {files.map(f => (
-                  <div key={f.id} className="file-row">
-                    <div className="file-row-icon">
-                      <FileText size={16} />
-                    </div>
-                    <div className="file-row-info">
-                      <div className="file-row-name">{f.file.name}</div>
-                      <div className="file-row-size">{(f.file.size / 1024 / 1024).toFixed(2)} MB</div>
-                    </div>
-                    <div className="file-row-x" onClick={() => removeFile(f.id)}>
-                      <X size={16} />
-                    </div>
-                  </div>
-                ))}
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={handleDrop}
+                  onDragOver={e => e.preventDefault()}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    borderRadius: '12px',
+                    borderStyle: 'dashed',
+                    borderColor: 'rgba(125,211,252,0.25)',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    maxHeight: files.length > 0 ? '100px' : '0px',
+                    opacity: files.length > 0 ? 1 : 0,
+                    overflow: 'hidden',
+                    padding: files.length > 0 ? '10px 14px' : '0px 14px',
+                    marginBottom: files.length > 0 ? '10px' : '0px',
+                    borderWidth: files.length > 0 ? '1px' : '0px',
+                  }}
+                >
+                  <Upload size={14} style={{ color: '#7dd3fc', flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px', color: '#8899aa', whiteSpace: 'nowrap' }}>Add another file</span>
+                </div>
 
                 <div className="field">
                   <span className="field-label">Deck Name</span>
