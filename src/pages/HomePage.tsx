@@ -93,7 +93,7 @@ export default function HomePage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
-  const { user, getIdToken, usage, setUsage } = useAuth();
+  const { user, getIdToken, usage, setUsage, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -780,8 +780,7 @@ export default function HomePage() {
               <button 
                 onClick={async () => {
                   try {
-                    const { signInWithPopup } = await import('firebase/auth');
-                    await signInWithPopup(auth, googleProvider);
+                    await signInWithGoogle();
                     setShowSignUpModal(false);
                   } catch (err: any) {
                     setAuthError(err.message);
