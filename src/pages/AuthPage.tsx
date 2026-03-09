@@ -18,7 +18,7 @@ const googleProvider = new GoogleAuthProvider();
 type Mode = "signin" | "signup" | "forgot";
 
 export default function AuthPage() {
-  const { user, signInWithGoogle, setUsage } = useAuth();
+  const { user, signInWithGoogle, setUsage, signingIn } = useAuth();
   const navigate = useNavigate();
 
   const [mode, setMode] = useState<Mode>("signin");
@@ -138,9 +138,10 @@ export default function AuthPage() {
             {mode !== "forgot" && (
               <>
                 <button
+                  type="button"
                   className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-full bg-[#7dd3fc] text-[#07090f] font-semibold hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(125,211,252,0.2)] mb-6"
                   onClick={handleGoogle}
-                  disabled={loading}
+                  disabled={loading || signingIn}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
