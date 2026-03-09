@@ -11,6 +11,7 @@ export default function DeckHistory() {
   useEffect(() => {
     if (user) {
       getDeckHistory(user.uid).then(data => {
+        console.log("Fetched deck history for user", user.uid, ":", data);
         setDecks(data);
         setLoading(false);
       });

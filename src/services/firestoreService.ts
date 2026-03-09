@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export interface DeckRecord {
@@ -12,8 +12,9 @@ export interface DeckRecord {
 
 export const saveDeckHistory = async (uid: string, deckData: Omit<DeckRecord, 'createdAt' | 'id'>) => {
   try {
-    const decksRef = collection(db, 'users', uid, 'decks');
-    await addDoc(decksRef, {
+    const deckId = Date.now().toString();
+    const deckRef = doc(db, 'users', uid, 'decks', deckId);
+    await setDoc(deckRef, {
       ...deckData,
       createdAt: serverTimestamp()
     });

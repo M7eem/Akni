@@ -13,7 +13,6 @@ interface UsageData {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signingIn: boolean;
   usage: UsageData | null;
   setUsage: React.Dispatch<React.SetStateAction<UsageData | null>>;
   signInWithGoogle: () => Promise<any>;
@@ -26,9 +25,9 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [signingIn, setSigningIn] = useState(false);
   const [usage, setUsage] = useState<UsageData | null>(null);
   const navigate = useNavigate();
+  const isSigningInRef = React.useRef(false);
 
   useEffect(() => {
     setPersistence(auth, browserLocalPersistence).catch((error) => {
@@ -92,8 +91,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   // signInWithGoogle no longer creates the doc — onAuthStateChanged handles all users
   const signInWithGoogle = async () => {
-    if (signingIn) return;
-    setSigningIn(true);
+    if (isSigningInRef.current) return;
+    isSigningInRef.current = true;
     try {
       const result = await signInWithPopup(auth, googleProvider);
       return result;
@@ -104,7 +103,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw error;
       }
     } finally {
-      setSigningIn(false);
+      isSigningInRef.current = false;
     }
   };
 
@@ -127,7 +126,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   if (loading) return <div style={{ minHeight: '100vh', background: '#07090f' }} />;
 
   return (
-    <AuthContext.Provider value={{ user, loading, signingIn, usage, setUsage, signInWithGoogle, signOut, getIdToken }}>
+    <AuthContext.Provider value={{ user, loading, usage, setUsage, signInWithGoogle, signOut, getIdToken }}>
       {!loading && children}
     </AuthContext.Provider>
   );

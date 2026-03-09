@@ -4,7 +4,7 @@ import { LogOut, User as UserIcon, History, BarChart3, Settings } from 'lucide-r
 import { useNavigate } from 'react-router-dom';
 
 export default function AuthButton() {
-  const { user, signOut, signInWithGoogle, usage, signingIn } = useAuth();
+  const { user, signOut, signInWithGoogle, usage } = useAuth();
   const navigate = useNavigate();
 
   if (user) {
@@ -86,8 +86,7 @@ export default function AuthButton() {
   return (
     <button
       onClick={signInWithGoogle}
-      disabled={signingIn}
-      className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-[#07090f] bg-[#7dd3fc] rounded-full hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(125,211,252,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
+      className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-[#07090f] bg-[#7dd3fc] rounded-full hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(125,211,252,0.2)]"
     >
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
