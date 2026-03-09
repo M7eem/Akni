@@ -51,6 +51,7 @@ export function getAdminDb(): Firestore {
 export { getDownloadURL };
 
 export function getAdminStorage(): Storage {
+  if (!adminStorage) {
     const app = getFirebaseAdmin();
     adminStorage = getStorage(app);
     console.log('Firebase Admin Storage initialized');
