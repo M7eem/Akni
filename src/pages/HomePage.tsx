@@ -5,7 +5,6 @@ import LabelEditorStep, { Label } from '../components/LabelEditorStep';
 import AuthButton from '../components/AuthButton';
 import DeckHistory from '../components/DeckHistory';
 import { useAuth } from '../contexts/AuthContext';
-import { saveDeckHistory } from '../services/firestoreService';
 import { getUsage } from '../services/deckHistoryService';
 import { signInWithRedirect, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -277,12 +276,6 @@ export default function HomePage() {
       if (user) {
   // Optimistic update
   setUsage(prev => prev ? { ...prev, used: prev.used + 1 } : prev);
-  
-  saveDeckHistory(user.uid, {
-    deckName: safeName,
-    cardCount: count,
-    fileName: name
-  }).catch(console.error);
   
   // Delay background sync so Firestore has time to reflect the increment
   setTimeout(() => {

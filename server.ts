@@ -13,13 +13,14 @@ import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
 import { generateOcclusionCards, detectLabelsForImage, generateOcclusionCardsFromLabels } from './src/services/occlusionService';
-import { requireAuth, optionalAuth, AuthenticatedRequest } from './src/authMiddleware';
-import { checkAndIncrementUsage, checkUsage } from './src/services/adminDeckHistoryService';
+import { requireAuth, optionalAuth, AuthenticatedRequest, getAdminStorage, getDownloadURL } from './src/authMiddleware';
+import { checkAndIncrementUsage, checkUsage, saveDeckHistory } from './src/services/adminDeckHistoryService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
@@ -338,6 +339,35 @@ app.post('/api/generate', generateLimiter, optionalAuth, upload.none(), async (r
     const fileSize = fs.statSync(outputPath).size;
     const totalCards = cards.length + occlusionCards.length;
     console.log(`APKG ready: ${outputFilename} (${fileSize} bytes, ${totalCards} cards)`);
+
+    if (req.user) {
+      try {
+        const storage = getAdminStorage();
+        const bucket = storage.bucket();
+        const deckId = uuidv4();
+        const storagePath = `users/${req.user.uid}/decks/${deckId}.apkg`;
+        const file = bucket.file(storagePath);
+        
+        await file.save(fs.readFileSync(outputPath), {
+          metadata: {
+            contentType: 'application/octet-stream',
+          }
+        });
+        
+        // Get the download URL
+        const downloadUrl = await getDownloadURL(file);
+
+        await saveDeckHistory(req.user.uid, {
+          deckName: deck_name.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'My Deck',
+          cardCount: totalCards,
+          fileName: outputFilename,
+          downloadUrl: downloadUrl
+        });
+        console.log(`Uploaded deck to Storage and saved history for user ${req.user.uid}`);
+      } catch (uploadError) {
+        console.error('Failed to upload deck to Storage or save history:', uploadError);
+      }
+    }
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${outputFilename}"`);

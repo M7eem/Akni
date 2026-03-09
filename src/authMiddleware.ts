@@ -1,12 +1,14 @@
 import { cert, initializeApp, getApp, App } from 'firebase-admin/app';
 import { getAuth, DecodedIdToken } from 'firebase-admin/auth';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getStorage, Storage, getDownloadURL } from 'firebase-admin/storage';
 import { Request, Response, NextFunction } from 'express';
 
 let firebaseApp: App | null = null;
 let adminDb: Firestore | null = null;
+let adminStorage: Storage | null = null;
 
-function getFirebaseAdmin(): App {
+export function getFirebaseAdmin(): App {
   if (!firebaseApp) {
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -27,6 +29,7 @@ function getFirebaseAdmin(): App {
     } catch {
       firebaseApp = initializeApp({
         credential: cert({ projectId, clientEmail, privateKey: formattedKey }),
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`
       });
     }
 
@@ -43,6 +46,16 @@ export function getAdminDb(): Firestore {
     console.log('Firebase Admin Firestore initialized');
   }
   return adminDb;
+}
+
+export { getDownloadURL };
+
+export function getAdminStorage(): Storage {
+    const app = getFirebaseAdmin();
+    adminStorage = getStorage(app);
+    console.log('Firebase Admin Storage initialized');
+  }
+  return adminStorage;
 }
 
 function isAdminUid(uid: string): boolean {

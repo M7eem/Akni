@@ -65,6 +65,20 @@ export const checkUsage = async (uid: string, email?: string) => {
   return true;
 };
 
+export const saveDeckHistory = async (uid: string, deckData: any) => {
+  try {
+    const userRef = getUserRef(uid);
+    const decksRef = userRef.collection('decks');
+    await decksRef.add({
+      ...deckData,
+      createdAt: FieldValue.serverTimestamp()
+    });
+    console.log(`Saved deck history for user: ${uid}`);
+  } catch (error) {
+    console.error(`Error saving deck history for user ${uid}:`, error);
+  }
+};
+
 export const checkAndIncrementUsage = async (uid: string, email?: string): Promise<number> => {
   const userRef = getUserRef(uid);
   const userDoc = await ensureUserDoc(uid, email);

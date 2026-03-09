@@ -6,6 +6,7 @@ export interface DeckRecord {
   deckName: string;
   cardCount: number;
   fileName: string;
+  downloadUrl?: string;
   createdAt: any;
 }
 
