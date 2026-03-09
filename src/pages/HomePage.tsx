@@ -7,7 +7,7 @@ import DeckHistory from '../components/DeckHistory';
 import { useAuth } from '../contexts/AuthContext';
 import { getUsage } from '../services/deckHistoryService';
 import { saveDeckHistory } from '../services/firestoreService';
-import { signInWithRedirect, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../lib/firebase';
 

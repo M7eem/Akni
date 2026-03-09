@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut as firebaseSignOut, setPersistence, browserLocalPersistence, getRedirectResult } from 'firebase/auth';
+import { User, signInWithPopup, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
@@ -33,12 +33,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setPersistence(auth, browserLocalPersistence).catch((error) => {
       console.error("Error setting persistence:", error);
     });
-
-    getRedirectResult(auth).then(result => {
-      if (result?.user) {
-        console.log("Redirect result user:", result.user);
-      }
-    }).catch(console.error);
 
     const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
       setUser(firebaseUser);
