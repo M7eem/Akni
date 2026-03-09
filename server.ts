@@ -5,6 +5,9 @@ import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { v4 as uuidv4 } from 'uuid';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
@@ -16,15 +19,48 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const PORT = 3000;
+
+// ── Rate Limiting ─────────────────────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
+});
+
+const generateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // Limit each IP to 20 generation requests per hour
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many generation requests from this IP, please try again after an hour' }
+});
+
+app.use('/api/', apiLimiter);
 
 // ── Uploads directory ─────────────────────────────────────────
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-const upload = multer({ dest: uploadDir });
+const upload = multer({ 
+  dest: uploadDir,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.pdf' && ext !== '.pptx') {
+      return cb(new Error('Only .pdf and .pptx files are allowed'));
+    }
+    cb(null, true);
+  }
+});
 
 // ── Session store ─────────────────────────────────────────────
 const sessionStore = new Map<string, any>();
@@ -44,9 +80,7 @@ function detectMimeType(buffer: Buffer): string {
 function getApiKey(): string | undefined {
   const keys = [process.env.GEMINI_API_KEY, process.env.GOOGLE_API_KEY, process.env.API_KEY];
   const validKey = keys.find(k => k && k.trim() !== '' && k.trim() !== 'undefined');
-  const key = validKey?.trim();
-  console.log("API Key length:", key?.length, "starts with:", key?.substring(0, 4));
-  return key;
+  return validKey?.trim();
 }
 
 // ── Routes ────────────────────────────────────────────────────
@@ -96,21 +130,24 @@ app.post('/api/extract-images', optionalAuth, upload.array('files'), async (req:
       return res.status(400).json({ error: 'No files uploaded' });
     }
 
-    const extractionResult = await extractContent(files);
+    try {
+      const extractionResult = await extractContent(files);
 
-    const sessionId = Date.now().toString();
-    sessionStore.set(sessionId, extractionResult);
+      const sessionId = uuidv4();
+      sessionStore.set(sessionId, extractionResult);
 
-    // Names only — client fetches images lazily via /api/image/:sessionId/:name
-    const imageList = Object.keys(extractionResult.images).map(name => ({ name, mimeType: 'image/png' }));
+      // Names only — client fetches images lazily via /api/image/:sessionId/:name
+      const imageList = Object.keys(extractionResult.images).map(name => ({ name, mimeType: 'image/png' }));
 
-    console.log(`Session ${sessionId}: ${imageList.length} images stored`);
-    files.forEach(file => { try { fs.unlinkSync(file.path); } catch {} });
+      console.log(`Session ${sessionId}: ${imageList.length} images stored`);
 
-    res.json({ sessionId, images: imageList });
+      res.json({ sessionId, images: imageList });
+    } finally {
+      files.forEach(file => { try { fs.unlinkSync(file.path); } catch {} });
+    }
   } catch (error) {
     console.error('Error extracting images:', error);
-    res.status(500).json({ error: 'Failed to extract images', details: (error as Error).message });
+    res.status(500).json({ error: 'Failed to extract images. Please try again later.' });
   }
 });
 
@@ -171,12 +208,12 @@ app.post('/api/detect-labels', optionalAuth, async (req: AuthenticatedRequest, r
     res.json({ labels });
   } catch (error) {
     console.error('Error detecting labels:', error);
-    res.status(500).json({ error: 'Failed to detect labels', details: (error as Error).message });
+    res.status(500).json({ error: 'Failed to detect labels. Please try again later.' });
   }
 });
 
 /** Generate Anki deck from session content */
-app.post('/api/generate', optionalAuth, upload.none(), async (req: AuthenticatedRequest, res) => {
+app.post('/api/generate', generateLimiter, optionalAuth, upload.none(), async (req: AuthenticatedRequest, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
@@ -295,8 +332,7 @@ app.post('/api/generate', optionalAuth, upload.none(), async (req: Authenticated
     console.error('Error generating flashcards:', error);
     if (error instanceof Error) console.error('Stack:', error.stack);
     res.status(500).json({
-      error: 'Failed to generate flashcards',
-      details: (error as Error).message
+      error: 'Failed to generate flashcards. Please try again later.'
     });
   }
 });
@@ -310,7 +346,8 @@ app.get('/api/models', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch models', details: (error as Error).message });
+    console.error('Error fetching models:', error);
+    res.status(500).json({ error: 'Failed to fetch models. Please try again later.' });
   }
 });
 
