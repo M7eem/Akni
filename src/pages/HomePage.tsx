@@ -780,7 +780,8 @@ export default function HomePage() {
               <button 
                 onClick={async () => {
                   try {
-                    await signInWithRedirect(auth, googleProvider);
+                    const { signInWithPopup } = await import('firebase/auth');
+                    await signInWithPopup(auth, googleProvider);
                     setShowSignUpModal(false);
                   } catch (err: any) {
                     setAuthError(err.message);
