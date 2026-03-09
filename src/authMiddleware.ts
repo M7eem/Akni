@@ -1,7 +1,7 @@
 import { cert, initializeApp, getApp, App } from 'firebase-admin/app';
 import { getAuth, DecodedIdToken } from 'firebase-admin/auth';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import { getStorage, Storage, getDownloadURL } from 'firebase-admin/storage';
+import { getStorage, Storage } from 'firebase-admin/storage';
 import { Request, Response, NextFunction } from 'express';
 
 let firebaseApp: App | null = null;
@@ -47,8 +47,6 @@ export function getAdminDb(): Firestore {
   }
   return adminDb;
 }
-
-export { getDownloadURL };
 
 export function getAdminStorage(): Storage {
   if (!adminStorage) {

@@ -13,7 +13,7 @@ import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
 import { generateOcclusionCards, detectLabelsForImage, generateOcclusionCardsFromLabels } from './src/services/occlusionService';
-import { requireAuth, optionalAuth, AuthenticatedRequest, getAdminStorage, getDownloadURL } from './src/authMiddleware';
+import { requireAuth, optionalAuth, AuthenticatedRequest, getAdminStorage } from './src/authMiddleware';
 import { checkAndIncrementUsage, checkUsage, saveDeckHistory } from './src/services/adminDeckHistoryService';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -354,8 +354,11 @@ app.post('/api/generate', generateLimiter, optionalAuth, upload.none(), async (r
           }
         });
         
+        // Make the file publicly readable
+        await file.makePublic();
+        
         // Get the download URL
-        const downloadUrl = await getDownloadURL(file);
+        const downloadUrl = file.publicUrl();
 
         await saveDeckHistory(req.user.uid, {
           deckName: deck_name.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'My Deck',

@@ -3,12 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { LogOut, User as UserIcon, History, BarChart3, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-interface AuthButtonProps {
-  onToggleHistory?: () => void;
-  showHistory?: boolean;
-}
-
-export default function AuthButton({ onToggleHistory, showHistory }: AuthButtonProps) {
+export default function AuthButton() {
   const { user, signOut, signInWithGoogle, usage } = useAuth();
   const navigate = useNavigate();
 
@@ -67,15 +62,13 @@ export default function AuthButton({ onToggleHistory, showHistory }: AuthButtonP
               Account
             </button>
 
-            {onToggleHistory && (
-              <button
-                onClick={onToggleHistory}
-                className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors ${showHistory ? 'bg-[#7dd3fc]/10 text-[#7dd3fc]' : 'text-[#8899aa] hover:text-[#eef6ff] hover:bg-white/5'}`}
-              >
-                <History size={16} />
-                Deck History
-              </button>
-            )}
+            <button
+              onClick={() => navigate('/history')}
+              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-[#8899aa] hover:text-[#eef6ff] hover:bg-white/5 transition-colors"
+            >
+              <History size={16} />
+              Deck History
+            </button>
             
             <button
               onClick={() => signOut()}

@@ -66,7 +66,7 @@ export default function DeckHistory() {
               <div className="text-xs text-[#556677]">
                 {deck.createdAt?.toDate ? deck.createdAt.toDate().toLocaleDateString() : 'Just now'}
               </div>
-              {deck.downloadUrl && (
+              {deck.downloadUrl ? (
                 <a 
                   href={deck.downloadUrl}
                   target="_blank"
@@ -76,6 +76,11 @@ export default function DeckHistory() {
                   <Download size={14} />
                   Download
                 </a>
+              ) : (
+                <span className="flex items-center gap-1.5 text-xs font-medium text-[#556677] bg-[rgba(255,255,255,0.02)] px-3 py-1.5 rounded-md cursor-not-allowed" title="Download not available for older decks">
+                  <Download size={14} />
+                  Not available
+                </span>
               )}
             </div>
           </div>

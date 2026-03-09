@@ -86,7 +86,6 @@ export default function HomePage() {
   const [selectedImageNames, setSelectedImageNames] = useState<string[]>([]);
   const [step, setStep] = useState<Step>('upload');
   const [detectedLabelsMap, setDetectedLabelsMap] = useState<Record<string, Label[]>>({});
-  const [showHistory, setShowHistory] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
@@ -343,34 +342,25 @@ export default function HomePage() {
               Log in
             </a>
           )}
-          <AuthButton 
-            onToggleHistory={() => setShowHistory(!showHistory)}
-            showHistory={showHistory}
-          />
+          <AuthButton />
         </div>
       </nav>
 
-      {showHistory ? (
-        <section className="max-w-6xl mx-auto px-6 py-12">
-          <DeckHistory />
-        </section>
-      ) : (
-        <>
-          <section className="hero">
-            {step !== 'labelEditor' && (
-              <>
-                {step === 'upload' && (
-                  <>
-                    <h1>Turn your lectures into<br/><span className="icy">Anki flashcards</span></h1>
-                    <p className="hero-sub" style={{ marginBottom: '48px' }}>
-                      Upload a PDF or PPTX and get a complete Anki deck in under a minute.
-                    </p>
-                  </>
-                )}
-
-                <div className="deck-card">
-                  {/* ── UPLOAD FORM ── */}
+      <section className="hero">
+        {step !== 'labelEditor' && (
+          <>
             {step === 'upload' && (
+              <>
+                <h1>Turn your lectures into<br/><span className="icy">Anki flashcards</span></h1>
+                <p className="hero-sub" style={{ marginBottom: '48px' }}>
+                  Upload a PDF or PPTX and get a complete Anki deck in under a minute.
+                </p>
+              </>
+            )}
+
+            <div className="deck-card">
+              {/* ── UPLOAD FORM ── */}
+        {step === 'upload' && (
               <div key="upload" className="fade-in">
                   {files.map(f => (
                   <div key={f.id} className="file-row">
@@ -942,8 +932,6 @@ export default function HomePage() {
           </motion.div>
         )}
       </AnimatePresence>
-        </>
-      )}
     </>
   );
 }
