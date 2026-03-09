@@ -35,13 +35,10 @@ export default function AuthPage() {
   }, [user, navigate]);
 
   const handleGoogle = async () => {
-    setError("");
-    setLoading(true);
     try {
       await signInWithGoogle();
     } catch (e: any) {
       setError(friendlyError(e.code));
-      setLoading(false);
     }
   };
 

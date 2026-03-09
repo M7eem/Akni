@@ -93,9 +93,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       return result;
-    } catch (error) {
-      console.error("Error signing in with Google", error);
-      throw error;
+    } catch (error: any) {
+      if (error.code !== 'auth/popup-closed-by-user') {
+        console.error("Error signing in with Google", error);
+        throw error;
+      }
     }
   };
 
