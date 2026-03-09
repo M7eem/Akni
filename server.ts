@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { v4 as uuidv4 } from 'uuid';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
+import cors from 'cors';
 import { extractContent } from './src/services/extractionService';
 import { generateFlashcards } from './src/services/geminiService';
 import { createAnkiPackage } from './src/services/ankiService';
@@ -23,6 +24,32 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://ais-dev-w4lsz5lcwsypn5bifzj3yf-7935056271.europe-west3.run.app',
+  'https://ais-pre-w4lsz5lcwsypn5bifzj3yf-7935056271.europe-west3.run.app'
+];
+
+if (process.env.RAILWAY_STATIC_URL) {
+  allowedOrigins.push(`https://${process.env.RAILWAY_STATIC_URL}`);
+}
+if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+  allowedOrigins.push(`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`);
+}
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const PORT = 3000;
@@ -334,20 +361,6 @@ app.post('/api/generate', generateLimiter, optionalAuth, upload.none(), async (r
     res.status(500).json({
       error: 'Failed to generate flashcards. Please try again later.'
     });
-  }
-});
-
-/** List available Gemini models (debug) */
-app.get('/api/models', async (req, res) => {
-  const apiKey = getApiKey();
-  if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
-  try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`);
-    const data = await response.json();
-    res.json(data);
-  } catch (error) {
-    console.error('Error fetching models:', error);
-    res.status(500).json({ error: 'Failed to fetch models. Please try again later.' });
   }
 });
 
