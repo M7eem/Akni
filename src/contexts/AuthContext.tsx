@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { User, signInWithPopup, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
@@ -30,17 +30,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const isSigningInRef = React.useRef(false);
 
   useEffect(() => {
-    // Handle redirect result first
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          console.log("Redirect sign-in successful:", result.user.email);
-        }
-      })
-      .catch((error) => {
-        console.error("Redirect result error:", error.code, error.message);
-      });
-
     setPersistence(auth, browserLocalPersistence).catch((error) => {
       console.error("Error setting persistence:", error);
     });
@@ -99,14 +88,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signInWithGoogle = async () => {
     if (isSigningInRef.current) return;
     isSigningInRef.current = true;
-    console.log("Starting Google sign in with redirect...");
+    console.log("Starting Google sign in with popup...");
     try {
-      await signInWithRedirect(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log("Sign in result:", result);
+      return result;
     } catch (error: any) {
       console.log("Sign in error code:", error.code);
       console.log("Sign in error message:", error.message);
-      console.error("Error signing in with Google", error);
-      throw error;
+      if (error.code !== 'auth/cancelled-popup-request' && 
+          error.code !== 'auth/popup-closed-by-user') {
+        console.error("Error signing in with Google", error);
+        throw error;
+      }
     } finally {
       isSigningInRef.current = false;
     }
