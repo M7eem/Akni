@@ -97,80 +97,75 @@ export default function AccountPage() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#07090f', color: '#eef6ff' }}>
-      {/* Header with Back Button */}
-      <header style={{ 
-        padding: '1rem 2rem', 
-        borderBottom: '1px solid #1a2235', 
-        display: 'flex', 
-        alignItems: 'center',
-        gap: '1rem',
-        background: '#0f1420'
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#07090f', color: '#eef6ff' }}>
+      {/* Sidebar */}
+      <aside style={{ 
+        width: '220px', 
+        padding: '40px 24px', 
+        borderRight: '1px solid #1a2235', 
+        background: '#0f1420',
+        display: 'flex',
+        flexDirection: 'column',
+        flexShrink: 0,
+        position: 'sticky',
+        top: 0,
+        height: '100vh'
       }}>
         <button 
           onClick={() => navigate('/')}
           style={{ 
             background: 'none', border: 'none', color: '#8899aa', cursor: 'pointer', 
-            display: 'flex', alignItems: 'center', gap: '0.5rem' 
+            display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2.5rem',
+            padding: 0
           }}
           className="hover:text-[#eef6ff] transition-colors"
         >
-          <ArrowLeft size={20} />
-          <span style={{ fontSize: '14px', fontWeight: 500 }}>Back</span>
+          <ArrowLeft size={18} />
+          <span style={{ fontSize: '14px', fontWeight: 500 }}>Back to home</span>
         </button>
-      </header>
 
-      <div style={{ 
-        maxWidth: '1000px', 
-        margin: '0 auto', 
-        display: 'flex', 
-        flexDirection: 'row',
-        padding: '2rem',
-        gap: '3rem'
-      }} className="flex-col md:flex-row">
+        <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '2rem', color: '#eef6ff' }}>Settings</h1>
         
-        {/* Sidebar */}
-        <aside style={{ width: '240px', flexShrink: 0 }} className="w-full md:w-[240px]">
-          <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '1.5rem', color: '#eef6ff' }}>Settings</h1>
-          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }} className="flex-row md:flex-col overflow-x-auto md:overflow-visible">
-            {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id as Tab)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '12px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  transition: 'all 0.2s ease',
-                  background: activeTab === item.id ? 'rgba(125, 211, 252, 0.08)' : 'transparent',
-                  color: activeTab === item.id ? '#7dd3fc' : '#8899aa',
-                  whiteSpace: 'nowrap'
-                }}
-                className="hover:bg-[rgba(125,211,252,0.04)]"
-              >
-                <item.icon size={18} />
-                {item.label}
-              </button>
-            ))}
-          </nav>
-        </aside>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as Tab)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.75rem 1rem',
+                borderRadius: '12px',
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontSize: '14px',
+                fontWeight: 500,
+                transition: 'all 0.2s ease',
+                background: activeTab === item.id ? 'rgba(125, 211, 252, 0.08)' : 'transparent',
+                color: activeTab === item.id ? '#7dd3fc' : '#8899aa',
+                width: '100%'
+              }}
+              className="hover:bg-[rgba(125, 211, 252, 0.04)]"
+            >
+              <item.icon size={18} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
 
-        {/* Content Area */}
-        <main style={{ flex: 1 }}>
+      {/* Content Area */}
+      <main style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+        <div style={{ maxWidth: '800px' }}>
           {activeTab === 'profile' && (
             <div>
               <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '2rem' }}>Profile</h2>
               
-              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '24px' }}>
+              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '32px' }}>
                 {/* Avatar Section */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '3rem' }}>
                   <div style={{ 
                     width: '72px', height: '72px', borderRadius: '50%', 
                     background: 'rgba(125,211,252,0.15)', border: '1px solid rgba(125,211,252,0.3)',
@@ -186,11 +181,11 @@ export default function AccountPage() {
                 </div>
 
                 {/* Rows */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
                   {/* Display Name Row */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2rem' }} className="flex-col sm:flex-row sm:items-center">
-                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa', width: '140px' }}>Display name</label>
-                    <div style={{ flex: 1, display: 'flex', gap: '0.75rem', width: '100%' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa', width: '160px' }}>Display name</label>
+                    <div style={{ flex: 1, display: 'flex', gap: '0.75rem' }}>
                       <input 
                         type="text" 
                         value={displayName} 
@@ -219,8 +214,8 @@ export default function AccountPage() {
                   </div>
 
                   {/* Email Row */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2rem' }} className="flex-col sm:flex-row sm:items-center">
-                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa', width: '140px' }}>Email address</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa', width: '160px' }}>Email address</label>
                     <div style={{ flex: 1, color: '#eef6ff', fontSize: '14px', fontWeight: 500 }}>
                       {user.email}
                     </div>
@@ -229,23 +224,25 @@ export default function AccountPage() {
                   <div style={{ height: '1px', background: '#1a2235' }}></div>
 
                   {/* Password Row */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '2rem' }} className="flex-col sm:flex-row">
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#eef6ff', marginBottom: '4px' }}>Password</label>
-                      <p style={{ fontSize: '13px', color: '#8899aa' }}>Update your password by receiving a reset link via email.</p>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '2rem' }}>
+                    <div style={{ width: '160px' }}>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#8899aa' }}>Password</label>
                     </div>
-                    <button 
-                      onClick={handleResetPassword}
-                      disabled={isSendingReset || resetSent}
-                      style={{ 
-                        background: 'none', border: 'none', color: '#7dd3fc', fontSize: '14px', fontWeight: 500,
-                        cursor: (isSendingReset || resetSent) ? 'not-allowed' : 'pointer',
-                        padding: 0
-                      }}
-                      className="hover:text-[#38bdf8] transition-colors"
-                    >
-                      {isSendingReset ? 'Sending...' : (resetSent ? 'Reset link sent' : 'Send reset link')}
-                    </button>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: '13px', color: '#8899aa', marginBottom: '1rem' }}>Update your password by receiving a reset link via email.</p>
+                      <button 
+                        onClick={handleResetPassword}
+                        disabled={isSendingReset || resetSent}
+                        style={{ 
+                          background: 'none', border: 'none', color: '#7dd3fc', fontSize: '14px', fontWeight: 500,
+                          cursor: (isSendingReset || resetSent) ? 'not-allowed' : 'pointer',
+                          padding: 0
+                        }}
+                        className="hover:text-[#38bdf8] transition-colors"
+                      >
+                        {isSendingReset ? 'Sending...' : (resetSent ? 'Reset link sent' : 'Send reset link')}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -256,13 +253,13 @@ export default function AccountPage() {
             <div>
               <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '2rem' }}>Plan & Billing</h2>
               
-              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '24px' }}>
+              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '32px' }}>
                 {/* Current Plan */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2.5rem' }}>
                   <div style={{ fontSize: '16px', fontWeight: 500 }}>You are on the <span style={{ color: '#7dd3fc' }}>{planName}</span> plan</div>
                   <span style={{ 
                     fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700,
-                    padding: '4px 10px', borderRadius: '9999px', background: 'rgba(125,211,252,0.1)', color: '#7dd3fc'
+                    padding: '4px 12px', borderRadius: '9999px', background: 'rgba(125,211,252,0.1)', color: '#7dd3fc'
                   }}>
                     {planName}
                   </span>
@@ -270,12 +267,12 @@ export default function AccountPage() {
 
                 {/* Usage */}
                 {usage && (
-                  <div style={{ marginBottom: '2.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '0.75rem' }}>
+                  <div style={{ marginBottom: '3rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '1rem' }}>
                       <span style={{ color: '#8899aa' }}>Usage</span>
                       <span style={{ color: '#eef6ff', fontWeight: 500 }}>{usage.used} of {usage.limit === 9999 ? '∞' : usage.limit} decks used this month</span>
                     </div>
-                    <div style={{ height: '8px', background: 'rgba(125,211,252,0.1)', borderRadius: '9999px', overflow: 'hidden', marginBottom: '0.75rem' }}>
+                    <div style={{ height: '8px', background: 'rgba(125,211,252,0.1)', borderRadius: '9999px', overflow: 'hidden', marginBottom: '1rem' }}>
                       <div style={{ 
                         height: '100%', background: '#7dd3fc', borderRadius: '9999px',
                         width: `${Math.min((usage.used / usage.limit) * 100, 100)}%`
@@ -287,14 +284,14 @@ export default function AccountPage() {
                   </div>
                 )}
 
-                <div style={{ height: '1px', background: '#1a2235', margin: '2rem 0' }}></div>
+                <div style={{ height: '1px', background: '#1a2235', margin: '2.5rem 0' }}></div>
 
                 {/* Upgrade Section */}
                 <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '1.5rem' }}>Available Plans</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div style={{ 
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-                    padding: '1rem', border: '1px solid #1a2235', borderRadius: '12px'
+                    padding: '1.25rem', border: '1px solid #1a2235', borderRadius: '12px'
                   }}>
                     <div>
                       <div style={{ fontSize: '14px', fontWeight: 600 }}>Pro</div>
@@ -304,7 +301,7 @@ export default function AccountPage() {
                       onClick={() => navigate('/#pricing')}
                       style={{ 
                         background: '#1a2235', color: '#eef6ff', border: 'none', borderRadius: '8px', 
-                        padding: '8px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
+                        padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
                       }}
                       className="hover:bg-[#1f2937] transition-colors"
                     >
@@ -314,7 +311,7 @@ export default function AccountPage() {
 
                   <div style={{ 
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-                    padding: '1rem', border: '1px solid #1a2235', borderRadius: '12px'
+                    padding: '1.25rem', border: '1px solid #1a2235', borderRadius: '12px'
                   }}>
                     <div>
                       <div style={{ fontSize: '14px', fontWeight: 600 }}>Unlimited</div>
@@ -324,7 +321,7 @@ export default function AccountPage() {
                       onClick={() => navigate('/#pricing')}
                       style={{ 
                         background: '#1a2235', color: '#eef6ff', border: 'none', borderRadius: '8px', 
-                        padding: '8px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
+                        padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
                       }}
                       className="hover:bg-[#1f2937] transition-colors"
                     >
@@ -340,11 +337,11 @@ export default function AccountPage() {
             <div>
               <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '2rem' }}>Danger Zone</h2>
               
-              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '2rem' }} className="flex-col sm:flex-row">
+              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '32px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '2rem' }}>
                   <div style={{ flex: 1 }}>
                     <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#ef4444', marginBottom: '0.5rem' }}>Delete account</h3>
-                    <p style={{ fontSize: '14px', color: '#8899aa', lineHeight: 1.5 }}>
+                    <p style={{ fontSize: '14px', color: '#8899aa', lineHeight: 1.6 }}>
                       Permanently delete your account and all associated data. This action cannot be undone.
                     </p>
                   </div>
@@ -352,7 +349,7 @@ export default function AccountPage() {
                     onClick={() => setShowDeleteModal(true)}
                     style={{ 
                       background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', fontWeight: 600, 
-                      cursor: 'pointer', padding: 0, whiteSpace: 'nowrap'
+                      cursor: 'pointer', padding: 0, whiteSpace: 'nowrap', marginTop: '4px'
                     }}
                     className="hover:underline"
                   >
@@ -362,8 +359,8 @@ export default function AccountPage() {
               </div>
             </div>
           )}
-        </main>
-      </div>
+        </div>
+      </main>
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
