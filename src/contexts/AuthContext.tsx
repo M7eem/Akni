@@ -35,6 +35,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+      console.log("Auth state changed:", firebaseUser?.email);
       setUser(firebaseUser);
       setLoading(false);
 
@@ -87,10 +88,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signInWithGoogle = async () => {
     if (isSigningInRef.current) return;
     isSigningInRef.current = true;
+    console.log("Starting Google sign in...");
     try {
       const result = await signInWithPopup(auth, googleProvider);
+      console.log("Sign in result:", result);
+      console.log("User:", result?.user?.email);
       return result;
     } catch (error: any) {
+      console.log("Sign in error code:", error.code);
+      console.log("Sign in error message:", error.message);
       if (error.code !== 'auth/cancelled-popup-request' && 
           error.code !== 'auth/popup-closed-by-user') {
         console.error("Error signing in with Google", error);
