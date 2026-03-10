@@ -4,9 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { updateProfile, sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { ArrowLeft, Loader2, User, CreditCard, Trash2, AlertTriangle, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, User, CreditCard, Trash2, AlertTriangle, Check, Clock } from 'lucide-react';
+import DeckHistory from '../components/DeckHistory';
 
-type Tab = 'profile' | 'billing' | 'danger';
+type Tab = 'profile' | 'history' | 'billing' | 'danger';
 
 export default function AccountPage() {
   const { user, usage } = useAuth();
@@ -92,6 +93,7 @@ export default function AccountPage() {
 
   const navItems = [
     { id: 'profile', label: 'Profile', icon: User },
+    { id: 'history', label: 'Deck History', icon: Clock },
     { id: 'billing', label: 'Plan & Billing', icon: CreditCard },
     { id: 'danger', label: 'Danger Zone', icon: Trash2 },
   ];
@@ -285,6 +287,13 @@ export default function AccountPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'history' && (
+            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+              <h2 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '32px', color: '#eef6ff' }}>Deck History</h2>
+              <DeckHistory />
             </div>
           )}
 

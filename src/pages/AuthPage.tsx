@@ -31,10 +31,16 @@ export default function AuthPage() {
   }, [user, navigate]);
 
   const handleGoogle = async () => {
+    setError("");
     try {
+      // Diagnostic check for Firebase config
+      if (!auth.app.options.apiKey) {
+        throw new Error("Firebase API Key is missing. Please check your environment variables in AI Studio settings.");
+      }
       await signInWithGoogle();
     } catch (e: any) {
-      setError(friendlyError(e.code));
+      console.error("Google Sign-In Error:", e);
+      setError(friendlyError(e.code || e.message));
     }
   };
 
@@ -282,6 +288,13 @@ export default function AuthPage() {
 }
 
 function friendlyError(code: string): string {
+  if (!code) return "Something went wrong. Please try again.";
+  
+  // Handle raw error messages if they aren't Firebase codes
+  if (code.includes("missing") || code.includes("API Key")) {
+    return code;
+  }
+
   switch (code) {
     case "auth/invalid-email":
       return "That email address doesn't look right.";
@@ -298,7 +311,11 @@ function friendlyError(code: string): string {
       return "Too many attempts. Please try again later.";
     case "auth/popup-closed-by-user":
       return "Sign-in popup was closed. Please try again.";
+    case "auth/unauthorized-domain":
+      return "This domain is not authorized for Firebase Authentication. Please add this URL to your 'Authorized domains' in the Firebase Console.";
+    case "auth/operation-not-allowed":
+      return "Google Sign-In is not enabled in your Firebase project. Please enable it in the Firebase Console.";
     default:
-      return "Something went wrong. Please try again.";
+      return `Error: ${code}. Please check your Firebase configuration and authorized domains.`;
   }
 }

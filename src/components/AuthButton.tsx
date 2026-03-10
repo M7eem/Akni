@@ -7,6 +7,25 @@ export default function AuthButton() {
   const { user, signOut, signInWithGoogle, usage } = useAuth();
   const navigate = useNavigate();
 
+  const handleGoogleSignIn = async () => {
+    try {
+      if (!auth.app.options.apiKey) {
+        alert("Firebase API Key is missing. Please check your environment variables in AI Studio settings.");
+        return;
+      }
+      await signInWithGoogle();
+    } catch (error: any) {
+      console.error("Google Sign-In Error:", error);
+      if (error.code === 'auth/unauthorized-domain') {
+        alert("This domain is not authorized for Firebase Authentication. Please add this URL to your 'Authorized domains' in the Firebase Console.");
+      } else if (error.code === 'auth/operation-not-allowed') {
+        alert("Google Sign-In is not enabled in your Firebase project. Please enable it in the Firebase Console.");
+      } else if (error.code !== 'auth/popup-closed-by-user') {
+        alert(`Sign-in failed: ${error.message || error.code}`);
+      }
+    }
+  };
+
   if (user) {
     return (
       <div className="relative group z-50">
@@ -85,7 +104,7 @@ export default function AuthButton() {
 
   return (
     <button
-      onClick={signInWithGoogle}
+      onClick={handleGoogleSignIn}
       className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-[#07090f] bg-[#7dd3fc] rounded-full hover:opacity-90 transition-opacity shadow-[0_0_15px_rgba(125,211,252,0.2)]"
     >
       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">

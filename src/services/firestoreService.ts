@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export interface DeckRecord {
@@ -35,5 +35,15 @@ export const getDeckHistory = async (uid: string): Promise<DeckRecord[]> => {
   } catch (error) {
     console.error("Error fetching deck history:", error);
     return [];
+  }
+};
+
+export const deleteDeckHistory = async (uid: string, deckId: string) => {
+  try {
+    const deckRef = doc(db, 'users', uid, 'decks', deckId);
+    await deleteDoc(deckRef);
+  } catch (error) {
+    console.error("Error deleting deck history:", error);
+    throw error;
   }
 };
