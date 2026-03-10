@@ -27,7 +27,8 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'https://ais-dev-w4lsz5lcwsypn5bifzj3yf-7935056271.europe-west3.run.app',
-  'https://ais-pre-w4lsz5lcwsypn5bifzj3yf-7935056271.europe-west3.run.app'
+  'https://ais-pre-w4lsz5lcwsypn5bifzj3yf-7935056271.europe-west3.run.app',
+  'https://ankit.study'
 ];
 
 if (process.env.RAILWAY_STATIC_URL) {
