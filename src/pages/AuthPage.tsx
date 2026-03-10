@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
-  signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  GoogleAuthProvider,
   updateProfile,
   sendPasswordResetEmail,
 } from "firebase/auth";
@@ -12,8 +10,6 @@ import { auth, db } from "../lib/firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
-
-const googleProvider = new GoogleAuthProvider();
 
 type Mode = "signin" | "signup" | "forgot";
 
