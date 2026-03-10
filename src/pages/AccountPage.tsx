@@ -4,14 +4,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { updateProfile, sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
-import { ArrowLeft, Loader2, Pencil, Check, X, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Loader2, User, CreditCard, Trash2, AlertTriangle, Check } from 'lucide-react';
+
+type Tab = 'profile' | 'billing' | 'danger';
 
 export default function AccountPage() {
   const { user, usage } = useAuth();
   const navigate = useNavigate();
 
+  const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [displayName, setDisplayName] = useState(user?.displayName || '');
-  const [isEditingName, setIsEditingName] = useState(false);
   const [isSavingName, setIsSavingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
 
@@ -44,16 +46,12 @@ export default function AccountPage() {
   };
 
   const handleSaveName = async () => {
-    if (!displayName.trim() || displayName === user.displayName) {
-      setIsEditingName(false);
-      return;
-    }
+    if (!displayName.trim() || displayName === user.displayName) return;
     setIsSavingName(true);
     try {
       await updateProfile(user, { displayName });
       setNameSaved(true);
       setTimeout(() => setNameSaved(false), 2000);
-      setIsEditingName(false);
     } catch (error) {
       console.error('Error updating profile', error);
     } finally {
@@ -91,235 +89,281 @@ export default function AccountPage() {
   };
 
   const planName = usage?.limit === 9999 ? 'Unlimited' : (usage?.limit && usage.limit > 10 ? 'Pro' : 'Free');
-  
-  // Circular Progress Calculations
-  const radius = 40;
-  const circumference = 2 * Math.PI * radius;
-  const usagePercent = usage ? Math.min((usage.used / usage.limit) * 100, 100) : 0;
-  const offset = circumference - (usagePercent / 100) * circumference;
 
-  const getDaysUntilReset = () => {
-    if (!usage?.resetsOn) return 0;
-    const resetDate = new Date(usage.resetsOn);
-    const now = new Date();
-    const diffTime = resetDate.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
-  };
+  const navItems = [
+    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'billing', label: 'Plan & Billing', icon: CreditCard },
+    { id: 'danger', label: 'Danger Zone', icon: Trash2 },
+  ];
 
   return (
     <div style={{ minHeight: '100vh', background: '#07090f', color: '#eef6ff' }}>
-      {/* HEADER */}
+      {/* Header with Back Button */}
       <header style={{ 
-        width: '100%', 
-        padding: '1.25rem 1.5rem', 
+        padding: '1rem 2rem', 
+        borderBottom: '1px solid #1a2235', 
         display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center',
-        position: 'relative',
-        borderBottom: '1px solid #1a2235',
-        background: 'rgba(15, 20, 32, 0.5)',
-        backdropFilter: 'blur(10px)',
-        zIndex: 50
+        alignItems: 'center',
+        gap: '1rem',
+        background: '#0f1420'
       }}>
         <button 
           onClick={() => navigate('/')}
           style={{ 
-            position: 'absolute', 
-            left: '1.5rem',
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            width: '40px',
-            height: '40px',
-            borderRadius: '12px',
-            background: '#1a2235',
-            color: '#eef6ff',
-            border: 'none',
-            cursor: 'pointer'
+            background: 'none', border: 'none', color: '#8899aa', cursor: 'pointer', 
+            display: 'flex', alignItems: 'center', gap: '0.5rem' 
           }}
-          className="hover:bg-[#2a3655] transition-colors"
+          className="hover:text-[#eef6ff] transition-colors"
         >
           <ArrowLeft size={20} />
+          <span style={{ fontSize: '14px', fontWeight: 500 }}>Back</span>
         </button>
-        <h1 style={{ fontSize: '18px', fontWeight: 600, letterSpacing: '-0.01em' }}>Account Settings</h1>
       </header>
 
-      <main style={{ maxWidth: '480px', margin: '0 auto', padding: '2rem 1.5rem 4rem' }}>
-        {/* PROFILE CARD */}
-        <div style={{ 
-          background: '#0f1420', 
-          border: '1px solid #1a2235', 
-          borderRadius: '24px', 
-          padding: '32px 24px', 
-          marginBottom: '1.5rem',
-          textAlign: 'center',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
-          <div style={{ 
-            width: '96px', height: '96px', borderRadius: '50%', 
-            background: 'linear-gradient(135deg, #7dd3fc 0%, #38bdf8 100%)',
-            margin: '0 auto 20px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#07090f', fontWeight: 700, fontSize: '32px',
-            boxShadow: '0 8px 24px rgba(56, 189, 248, 0.2)'
-          }}>
-            {getInitials()}
-          </div>
+      <div style={{ 
+        maxWidth: '1000px', 
+        margin: '0 auto', 
+        display: 'flex', 
+        flexDirection: 'row',
+        padding: '2rem',
+        gap: '3rem'
+      }} className="flex-col md:flex-row">
+        
+        {/* Sidebar */}
+        <aside style={{ width: '240px', flexShrink: 0 }} className="w-full md:w-[240px]">
+          <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '1.5rem', color: '#eef6ff' }}>Settings</h1>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }} className="flex-row md:flex-col overflow-x-auto md:overflow-visible">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id as Tab)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '12px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  transition: 'all 0.2s ease',
+                  background: activeTab === item.id ? 'rgba(125, 211, 252, 0.08)' : 'transparent',
+                  color: activeTab === item.id ? '#7dd3fc' : '#8899aa',
+                  whiteSpace: 'nowrap'
+                }}
+                className="hover:bg-[rgba(125,211,252,0.04)]"
+              >
+                <item.icon size={18} />
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-          <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-            {isEditingName ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', maxWidth: '280px' }}>
-                <input 
-                  type="text" 
-                  value={displayName} 
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
-                  style={{ 
-                    flex: 1, background: '#07090f', border: '1px solid #38bdf8', borderRadius: '8px', 
-                    padding: '6px 12px', color: '#eef6ff', fontSize: '20px', fontWeight: 600, textAlign: 'center', outline: 'none'
-                  }}
-                />
-                <button 
-                  onClick={handleSaveName}
-                  style={{ color: '#4ade80', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
-                >
-                  <Check size={20} />
-                </button>
-                <button 
-                  onClick={() => { setDisplayName(user.displayName || ''); setIsEditingName(false); }}
-                  style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            ) : (
-              <>
-                <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#eef6ff' }}>{user.displayName || 'User'}</h2>
-                <button 
-                  onClick={() => setIsEditingName(true)}
-                  style={{ color: '#8899aa', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
-                  className="hover:text-[#7dd3fc] transition-colors"
-                >
-                  <Pencil size={16} />
-                </button>
-              </>
-            )}
-          </div>
-          
-          <p style={{ fontSize: '14px', color: '#8899aa', marginBottom: '24px' }}>{user.email}</p>
+        {/* Content Area */}
+        <main style={{ flex: 1 }}>
+          {activeTab === 'profile' && (
+            <div>
+              <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '2rem' }}>Profile</h2>
+              
+              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '24px' }}>
+                {/* Avatar Section */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '2.5rem' }}>
+                  <div style={{ 
+                    width: '72px', height: '72px', borderRadius: '50%', 
+                    background: 'rgba(125,211,252,0.15)', border: '1px solid rgba(125,211,252,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#7dd3fc', fontWeight: 700, fontSize: '24px'
+                  }}>
+                    {getInitials()}
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#eef6ff' }}>{user.displayName || 'User'}</h3>
+                    <p style={{ fontSize: '14px', color: '#8899aa' }}>Your personal account profile</p>
+                  </div>
+                </div>
 
-          <button 
-            onClick={handleResetPassword}
-            disabled={isSendingReset || resetSent}
-            style={{ 
-              background: 'none', border: 'none', color: '#7dd3fc', fontSize: '13px', fontWeight: 500,
-              cursor: (isSendingReset || resetSent) ? 'not-allowed' : 'pointer',
-              textDecoration: 'underline', textUnderlineOffset: '4px'
-            }}
-            className="hover:text-[#38bdf8] transition-colors"
-          >
-            {isSendingReset ? 'Sending...' : (resetSent ? 'Reset link sent!' : 'Change Password')}
-          </button>
-        </div>
+                {/* Rows */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                  {/* Display Name Row */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2rem' }} className="flex-col sm:flex-row sm:items-center">
+                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa', width: '140px' }}>Display name</label>
+                    <div style={{ flex: 1, display: 'flex', gap: '0.75rem', width: '100%' }}>
+                      <input 
+                        type="text" 
+                        value={displayName} 
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        style={{ 
+                          flex: 1, background: '#07090f', border: '1px solid #1a2235', borderRadius: '8px', 
+                          padding: '10px 14px', color: '#eef6ff', fontSize: '14px', outline: 'none'
+                        }}
+                        className="focus:border-[#7dd3fc]/50 transition-colors"
+                      />
+                      <button 
+                        onClick={handleSaveName}
+                        disabled={isSavingName || displayName === user.displayName || !displayName.trim()}
+                        style={{ 
+                          background: nameSaved ? 'rgba(34,197,94,0.1)' : '#1a2235', 
+                          color: nameSaved ? '#4ade80' : '#eef6ff',
+                          border: 'none', borderRadius: '8px', padding: '0 1.5rem', fontSize: '14px', fontWeight: 500,
+                          cursor: (isSavingName || displayName === user.displayName || !displayName.trim()) ? 'not-allowed' : 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '0.5rem'
+                        }}
+                        className="hover:bg-[#1f2937] transition-colors"
+                      >
+                        {isSavingName ? <Loader2 size={16} className="animate-spin" /> : (nameSaved ? <Check size={16} /> : 'Save')}
+                      </button>
+                    </div>
+                  </div>
 
-        {/* PLAN CARD */}
-        <div style={{ 
-          background: '#0f1420', 
-          border: '1px solid #1a2235', 
-          borderRadius: '24px', 
-          padding: '24px', 
-          marginBottom: '1.5rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 600 }}>Current Plan</h3>
-            <span style={{ 
-              fontSize: '12px', padding: '4px 12px', borderRadius: '9999px',
-              background: planName === 'Free' ? 'rgba(136, 153, 170, 0.1)' : 'rgba(56, 189, 248, 0.15)',
-              color: planName === 'Free' ? '#8899aa' : '#7dd3fc',
-              fontWeight: 600, border: `1px solid ${planName === 'Free' ? 'rgba(136, 153, 170, 0.2)' : 'rgba(56, 189, 248, 0.3)'}`
-            }}>
-              {planName}
-            </span>
-          </div>
+                  {/* Email Row */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2rem' }} className="flex-col sm:flex-row sm:items-center">
+                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa', width: '140px' }}>Email address</label>
+                    <div style={{ flex: 1, color: '#eef6ff', fontSize: '14px', fontWeight: 500 }}>
+                      {user.email}
+                    </div>
+                  </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
-            <div style={{ position: 'relative', width: '100px', height: '100px' }}>
-              <svg width="100" height="100" viewBox="0 0 100 100">
-                <circle 
-                  cx="50" cy="50" r={radius} 
-                  fill="none" stroke="#1a2235" strokeWidth="8" 
-                />
-                <circle 
-                  cx="50" cy="50" r={radius} 
-                  fill="none" stroke="#38bdf8" strokeWidth="8" 
-                  strokeDasharray={circumference}
-                  strokeDashoffset={offset}
-                  strokeLinecap="round"
-                  style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-                  transform="rotate(-90 50 50)"
-                />
-              </svg>
-              <div style={{ 
-                position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <span style={{ fontSize: '18px', fontWeight: 700 }}>{usage?.used || 0}</span>
-                <span style={{ fontSize: '10px', color: '#8899aa', textTransform: 'uppercase', letterSpacing: '0.05em' }}>/ {usage?.limit === 9999 ? '∞' : usage?.limit || 10}</span>
+                  <div style={{ height: '1px', background: '#1a2235' }}></div>
+
+                  {/* Password Row */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '2rem' }} className="flex-col sm:flex-row">
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#eef6ff', marginBottom: '4px' }}>Password</label>
+                      <p style={{ fontSize: '13px', color: '#8899aa' }}>Update your password by receiving a reset link via email.</p>
+                    </div>
+                    <button 
+                      onClick={handleResetPassword}
+                      disabled={isSendingReset || resetSent}
+                      style={{ 
+                        background: 'none', border: 'none', color: '#7dd3fc', fontSize: '14px', fontWeight: 500,
+                        cursor: (isSendingReset || resetSent) ? 'not-allowed' : 'pointer',
+                        padding: 0
+                      }}
+                      className="hover:text-[#38bdf8] transition-colors"
+                    >
+                      {isSendingReset ? 'Sending...' : (resetSent ? 'Reset link sent' : 'Send reset link')}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-            <p style={{ fontSize: '13px', color: '#8899aa' }}>
-              Resets in <span style={{ color: '#eef6ff', fontWeight: 600 }}>{getDaysUntilReset()} days</span>
-            </p>
-          </div>
-
-          {planName === 'Free' && (
-            <button 
-              onClick={() => navigate('/#pricing')}
-              style={{ 
-                width: '100%', padding: '14px', background: '#38bdf8', color: '#07090f', 
-                borderRadius: '14px', fontWeight: 600, fontSize: '15px', border: 'none', cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(56, 189, 248, 0.2)'
-              }}
-              className="hover:bg-[#7dd3fc] transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
-              Upgrade to Pro
-            </button>
           )}
-        </div>
 
-        {/* DANGER ZONE */}
-        <div style={{ marginTop: '3rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', marginBottom: '12px' }}>
-            <AlertTriangle size={18} />
-            <h3 style={{ fontSize: '14px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Danger Zone</h3>
-          </div>
-          
-          <div style={{ 
-            background: 'rgba(239, 68, 68, 0.03)', 
-            border: '1px solid rgba(239, 68, 68, 0.1)', 
-            borderRadius: '20px', 
-            padding: '20px' 
-          }}>
-            <p style={{ fontSize: '13px', color: '#8899aa', marginBottom: '20px', lineHeight: 1.5 }}>
-              Deleting your account is permanent. All your deck history, usage data, and settings will be wiped instantly. This action cannot be undone.
-            </p>
-            
-            <button 
-              onClick={() => setShowDeleteModal(true)}
-              style={{ 
-                width: '100%', background: 'none', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '12px', 
-                padding: '12px', color: '#ef4444', fontSize: '14px', fontWeight: 600, cursor: 'pointer'
-              }}
-              className="hover:bg-[#ef4444] hover:text-white transition-all"
-            >
-              Delete My Account
-            </button>
-          </div>
-        </div>
-      </main>
+          {activeTab === 'billing' && (
+            <div>
+              <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '2rem' }}>Plan & Billing</h2>
+              
+              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '24px' }}>
+                {/* Current Plan */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 500 }}>You are on the <span style={{ color: '#7dd3fc' }}>{planName}</span> plan</div>
+                  <span style={{ 
+                    fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700,
+                    padding: '4px 10px', borderRadius: '9999px', background: 'rgba(125,211,252,0.1)', color: '#7dd3fc'
+                  }}>
+                    {planName}
+                  </span>
+                </div>
+
+                {/* Usage */}
+                {usage && (
+                  <div style={{ marginBottom: '2.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '0.75rem' }}>
+                      <span style={{ color: '#8899aa' }}>Usage</span>
+                      <span style={{ color: '#eef6ff', fontWeight: 500 }}>{usage.used} of {usage.limit === 9999 ? '∞' : usage.limit} decks used this month</span>
+                    </div>
+                    <div style={{ height: '8px', background: 'rgba(125,211,252,0.1)', borderRadius: '9999px', overflow: 'hidden', marginBottom: '0.75rem' }}>
+                      <div style={{ 
+                        height: '100%', background: '#7dd3fc', borderRadius: '9999px',
+                        width: `${Math.min((usage.used / usage.limit) * 100, 100)}%`
+                      }}></div>
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#8899aa' }}>
+                      Resets on {new Date(usage.resetsOn).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ height: '1px', background: '#1a2235', margin: '2rem 0' }}></div>
+
+                {/* Upgrade Section */}
+                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '1.5rem' }}>Available Plans</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                    padding: '1rem', border: '1px solid #1a2235', borderRadius: '12px'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600 }}>Pro</div>
+                      <div style={{ fontSize: '13px', color: '#8899aa' }}>$9/month • 50 decks/mo</div>
+                    </div>
+                    <button 
+                      onClick={() => navigate('/#pricing')}
+                      style={{ 
+                        background: '#1a2235', color: '#eef6ff', border: 'none', borderRadius: '8px', 
+                        padding: '8px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
+                      }}
+                      className="hover:bg-[#1f2937] transition-colors"
+                    >
+                      Upgrade
+                    </button>
+                  </div>
+
+                  <div style={{ 
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                    padding: '1rem', border: '1px solid #1a2235', borderRadius: '12px'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600 }}>Unlimited</div>
+                      <div style={{ fontSize: '13px', color: '#8899aa' }}>$19/month • Unlimited decks</div>
+                    </div>
+                    <button 
+                      onClick={() => navigate('/#pricing')}
+                      style={{ 
+                        background: '#1a2235', color: '#eef6ff', border: 'none', borderRadius: '8px', 
+                        padding: '8px 16px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
+                      }}
+                      className="hover:bg-[#1f2937] transition-colors"
+                    >
+                      Upgrade
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'danger' && (
+            <div>
+              <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '2rem' }}>Danger Zone</h2>
+              
+              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '2rem' }} className="flex-col sm:flex-row">
+                  <div style={{ flex: 1 }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#ef4444', marginBottom: '0.5rem' }}>Delete account</h3>
+                    <p style={{ fontSize: '14px', color: '#8899aa', lineHeight: 1.5 }}>
+                      Permanently delete your account and all associated data. This action cannot be undone.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setShowDeleteModal(true)}
+                    style={{ 
+                      background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', fontWeight: 600, 
+                      cursor: 'pointer', padding: 0, whiteSpace: 'nowrap'
+                    }}
+                    className="hover:underline"
+                  >
+                    I want to delete my account
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
@@ -374,4 +418,5 @@ export default function AccountPage() {
     </div>
   );
 }
+
 
