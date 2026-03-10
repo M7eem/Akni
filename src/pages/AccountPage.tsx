@@ -97,102 +97,141 @@ export default function AccountPage() {
   ];
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#07090f', color: '#eef6ff' }}>
-      {/* Sidebar */}
+    <div style={{ 
+      display: 'grid', 
+      gridTemplateColumns: '260px 1fr', 
+      minHeight: '100vh', 
+      background: '#07090f', 
+      color: '#eef6ff', 
+      fontFamily: 'Inter, sans-serif' 
+    }}>
+      {/* Sidebar Navigation */}
       <aside style={{ 
-        width: '220px', 
-        padding: '40px 24px', 
-        borderRight: '1px solid #1a2235', 
-        background: '#0f1420',
+        background: '#0f1420', 
+        borderRight: '1px solid #1a2235',
         display: 'flex',
         flexDirection: 'column',
-        flexShrink: 0,
         position: 'sticky',
         top: 0,
-        height: '100vh'
+        height: '100vh',
+        zIndex: 50,
+        flexShrink: 0
       }}>
-        <button 
-          onClick={() => navigate('/')}
-          style={{ 
-            background: 'none', border: 'none', color: '#8899aa', cursor: 'pointer', 
-            display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '2.5rem',
-            padding: 0
-          }}
-          className="hover:text-[#eef6ff] transition-colors"
-        >
-          <ArrowLeft size={18} />
-          <span style={{ fontSize: '14px', fontWeight: 500 }}>Back to home</span>
-        </button>
+        <div style={{ padding: '32px 24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Back Button */}
+          <button 
+            onClick={() => navigate('/')}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              color: '#8899aa', 
+              background: 'none', 
+              border: 'none', 
+              padding: '0',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 500,
+              marginBottom: '32px',
+              textAlign: 'left'
+            }}
+            className="hover:text-[#eef6ff] transition-colors"
+          >
+            <ArrowLeft size={18} />
+            Back to home
+          </button>
 
-        <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '2rem', color: '#eef6ff' }}>Settings</h1>
-        
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id as Tab)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem',
-                padding: '0.75rem 1rem',
-                borderRadius: '12px',
-                border: 'none',
-                cursor: 'pointer',
-                textAlign: 'left',
-                fontSize: '14px',
-                fontWeight: 500,
-                transition: 'all 0.2s ease',
-                background: activeTab === item.id ? 'rgba(125, 211, 252, 0.08)' : 'transparent',
-                color: activeTab === item.id ? '#7dd3fc' : '#8899aa',
-                width: '100%'
-              }}
-              className="hover:bg-[rgba(125, 211, 252, 0.04)]"
-            >
-              <item.icon size={18} />
-              {item.label}
-            </button>
-          ))}
-        </nav>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: '#eef6ff', marginBottom: '24px' }}>Settings</div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {navItems.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id as Tab)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    transition: 'all 0.2s ease',
+                    background: isActive ? 'rgba(125, 211, 252, 0.1)' : 'transparent',
+                    color: isActive ? '#7dd3fc' : '#8899aa',
+                    width: '100%'
+                  }}
+                  className={!isActive ? "hover:bg-white/5 hover:text-[#eef6ff]" : ""}
+                >
+                  <item.icon size={18} />
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ marginTop: 'auto', paddingTop: '24px', borderTop: '1px solid #1a2235' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ 
+                width: '32px', height: '32px', borderRadius: '50%', 
+                background: 'rgba(125,211,252,0.1)', border: '1px solid rgba(125,211,252,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#7dd3fc', fontWeight: 600, fontSize: '12px'
+              }}>
+                {getInitials()}
+              </div>
+              <div style={{ overflow: 'hidden' }}>
+                <p style={{ fontSize: '13px', fontWeight: 600, color: '#eef6ff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
+                  {user.displayName || 'User'}
+                </p>
+                <p style={{ fontSize: '11px', color: '#8899aa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
+                  {user.email}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </aside>
 
-      {/* Content Area */}
-      <main style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
-        <div style={{ maxWidth: '800px' }}>
+      {/* Main Content Area */}
+      <main style={{ overflowY: 'auto', background: '#07090f' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto', padding: '64px 40px' }}>
           {activeTab === 'profile' && (
-            <div>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '2rem' }}>Profile</h2>
+            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+              <h2 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '32px', color: '#eef6ff' }}>Profile</h2>
               
-              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '32px' }}>
-                {/* Avatar Section */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '3rem' }}>
+              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '40px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginBottom: '40px' }}>
                   <div style={{ 
-                    width: '72px', height: '72px', borderRadius: '50%', 
-                    background: 'rgba(125,211,252,0.15)', border: '1px solid rgba(125,211,252,0.3)',
+                    width: '80px', height: '80px', borderRadius: '50%', 
+                    background: 'rgba(125,211,252,0.1)', border: '1px solid rgba(125,211,252,0.2)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#7dd3fc', fontWeight: 700, fontSize: '24px'
+                    color: '#7dd3fc', fontWeight: 700, fontSize: '28px'
                   }}>
                     {getInitials()}
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#eef6ff' }}>{user.displayName || 'User'}</h3>
-                    <p style={{ fontSize: '14px', color: '#8899aa' }}>Your personal account profile</p>
+                    <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#eef6ff', margin: 0 }}>{user.displayName || 'User'}</h3>
+                    <p style={{ fontSize: '14px', color: '#8899aa', margin: '4px 0 0 0' }}>Your personal account profile</p>
                   </div>
                 </div>
 
-                {/* Rows */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-                  {/* Display Name Row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa', width: '160px' }}>Display name</label>
-                    <div style={{ flex: 1, display: 'flex', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', alignItems: 'center', gap: '24px' }}>
+                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa' }}>Display name</label>
+                    <div style={{ display: 'flex', gap: '12px' }}>
                       <input 
                         type="text" 
                         value={displayName} 
                         onChange={(e) => setDisplayName(e.target.value)}
                         style={{ 
                           flex: 1, background: '#07090f', border: '1px solid #1a2235', borderRadius: '8px', 
-                          padding: '10px 14px', color: '#eef6ff', fontSize: '14px', outline: 'none'
+                          padding: '12px 16px', color: '#eef6ff', fontSize: '14px', outline: 'none'
                         }}
                         className="focus:border-[#7dd3fc]/50 transition-colors"
                       />
@@ -202,43 +241,43 @@ export default function AccountPage() {
                         style={{ 
                           background: nameSaved ? 'rgba(34,197,94,0.1)' : '#1a2235', 
                           color: nameSaved ? '#4ade80' : '#eef6ff',
-                          border: 'none', borderRadius: '8px', padding: '0 1.5rem', fontSize: '14px', fontWeight: 500,
+                          border: 'none', borderRadius: '8px', padding: '0 24px', fontSize: '14px', fontWeight: 600,
                           cursor: (isSavingName || displayName === user.displayName || !displayName.trim()) ? 'not-allowed' : 'pointer',
-                          display: 'flex', alignItems: 'center', gap: '0.5rem'
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          transition: 'all 0.2s ease'
                         }}
-                        className="hover:bg-[#1f2937] transition-colors"
+                        className="hover:bg-[#1f2937]"
                       >
                         {isSavingName ? <Loader2 size={16} className="animate-spin" /> : (nameSaved ? <Check size={16} /> : 'Save')}
                       </button>
                     </div>
                   </div>
 
-                  {/* Email Row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa', width: '160px' }}>Email address</label>
-                    <div style={{ flex: 1, color: '#eef6ff', fontSize: '14px', fontWeight: 500 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', alignItems: 'center', gap: '24px' }}>
+                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa' }}>Email address</label>
+                    <div style={{ color: '#eef6ff', fontSize: '14px', fontWeight: 500 }}>
                       {user.email}
                     </div>
                   </div>
 
                   <div style={{ height: '1px', background: '#1a2235' }}></div>
 
-                  {/* Password Row */}
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '2rem' }}>
-                    <div style={{ width: '160px' }}>
-                      <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, color: '#8899aa' }}>Password</label>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: '13px', color: '#8899aa', marginBottom: '1rem' }}>Update your password by receiving a reset link via email.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', alignItems: 'flex-start', gap: '24px' }}>
+                    <label style={{ fontSize: '14px', fontWeight: 500, color: '#8899aa' }}>Password</label>
+                    <div>
+                      <p style={{ fontSize: '14px', color: '#8899aa', marginBottom: '12px', lineHeight: 1.5, margin: '0 0 12px 0' }}>
+                        Update your password by receiving a reset link via email.
+                      </p>
                       <button 
                         onClick={handleResetPassword}
                         disabled={isSendingReset || resetSent}
                         style={{ 
-                          background: 'none', border: 'none', color: '#7dd3fc', fontSize: '14px', fontWeight: 500,
+                          background: 'none', border: 'none', color: '#7dd3fc', fontSize: '14px', fontWeight: 600,
                           cursor: (isSendingReset || resetSent) ? 'not-allowed' : 'pointer',
-                          padding: 0
+                          padding: 0,
+                          transition: 'color 0.2s ease'
                         }}
-                        className="hover:text-[#38bdf8] transition-colors"
+                        className="hover:text-[#38bdf8]"
                       >
                         {isSendingReset ? 'Sending...' : (resetSent ? 'Reset link sent' : 'Send reset link')}
                       </button>
@@ -250,110 +289,101 @@ export default function AccountPage() {
           )}
 
           {activeTab === 'billing' && (
-            <div>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '2rem' }}>Plan & Billing</h2>
+            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+              <h2 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '32px', color: '#eef6ff' }}>Plan & Billing</h2>
               
-              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '32px' }}>
-                {/* Current Plan */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2.5rem' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 500 }}>You are on the <span style={{ color: '#7dd3fc' }}>{planName}</span> plan</div>
+              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '40px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '40px' }}>
+                  <div>
+                    <p style={{ fontSize: '14px', color: '#8899aa', marginBottom: '4px', margin: '0 0 4px 0' }}>Current Plan</p>
+                    <div style={{ fontSize: '20px', fontWeight: 600, color: '#eef6ff' }}>{planName}</div>
+                  </div>
                   <span style={{ 
-                    fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700,
-                    padding: '4px 12px', borderRadius: '9999px', background: 'rgba(125,211,252,0.1)', color: '#7dd3fc'
+                    fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700,
+                    padding: '6px 16px', borderRadius: '9999px', background: 'rgba(125,211,252,0.1)', color: '#7dd3fc',
+                    border: '1px solid rgba(125,211,252,0.2)'
                   }}>
                     {planName}
                   </span>
                 </div>
 
-                {/* Usage */}
                 {usage && (
-                  <div style={{ marginBottom: '3rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '1rem' }}>
-                      <span style={{ color: '#8899aa' }}>Usage</span>
-                      <span style={{ color: '#eef6ff', fontWeight: 500 }}>{usage.used} of {usage.limit === 9999 ? '∞' : usage.limit} decks used this month</span>
+                  <div style={{ marginBottom: '40px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '12px' }}>
+                      <span style={{ color: '#8899aa', fontWeight: 500 }}>Usage</span>
+                      <span style={{ color: '#eef6ff', fontWeight: 600 }}>{usage.used} / {usage.limit === 9999 ? '∞' : usage.limit} decks</span>
                     </div>
-                    <div style={{ height: '8px', background: 'rgba(125,211,252,0.1)', borderRadius: '9999px', overflow: 'hidden', marginBottom: '1rem' }}>
+                    <div style={{ height: '10px', background: 'rgba(125,211,252,0.05)', borderRadius: '9999px', overflow: 'hidden', marginBottom: '12px', border: '1px solid #1a2235' }}>
                       <div style={{ 
-                        height: '100%', background: '#7dd3fc', borderRadius: '9999px',
-                        width: `${Math.min((usage.used / usage.limit) * 100, 100)}%`
+                        height: '100%', background: 'linear-gradient(90deg, #7dd3fc 0%, #38bdf8 100%)', borderRadius: '9999px',
+                        width: `${Math.min((usage.used / usage.limit) * 100, 100)}%`,
+                        transition: 'width 1s ease-out'
                       }}></div>
                     </div>
-                    <div style={{ fontSize: '13px', color: '#8899aa' }}>
-                      Resets on {new Date(usage.resetsOn).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-                    </div>
+                    <p style={{ fontSize: '13px', color: '#8899aa', margin: 0 }}>
+                      Usage resets on {new Date(usage.resetsOn).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </p>
                   </div>
                 )}
 
-                <div style={{ height: '1px', background: '#1a2235', margin: '2.5rem 0' }}></div>
+                <div style={{ height: '1px', background: '#1a2235', margin: '40px 0' }}></div>
 
-                {/* Upgrade Section */}
-                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '1.5rem' }}>Available Plans</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ 
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-                    padding: '1.25rem', border: '1px solid #1a2235', borderRadius: '12px'
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 600 }}>Pro</div>
-                      <div style={{ fontSize: '13px', color: '#8899aa' }}>$9/month • 50 decks/mo</div>
+                <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px', color: '#eef6ff', margin: '0 0 20px 0' }}>Available Plans</h3>
+                <div style={{ display: 'grid', gap: '16px' }}>
+                  {[
+                    { name: 'Pro', price: '$9/mo', desc: '50 decks per month' },
+                    { name: 'Unlimited', price: '$19/mo', desc: 'Unlimited deck generation' }
+                  ].map((plan) => (
+                    <div key={plan.name} style={{ 
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                      padding: '20px 24px', border: '1px solid #1a2235', borderRadius: '12px',
+                      background: '#07090f'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '16px', fontWeight: 600, color: '#eef6ff' }}>{plan.name}</div>
+                        <div style={{ fontSize: '14px', color: '#8899aa' }}>{plan.price} • {plan.desc}</div>
+                      </div>
+                      <button 
+                        onClick={() => navigate('/#pricing')}
+                        style={{ 
+                          background: '#1a2235', color: '#eef6ff', border: 'none', borderRadius: '8px', 
+                          padding: '10px 24px', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        className="hover:bg-[#7dd3fc] hover:text-[#07090f]"
+                      >
+                        Upgrade
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => navigate('/#pricing')}
-                      style={{ 
-                        background: '#1a2235', color: '#eef6ff', border: 'none', borderRadius: '8px', 
-                        padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
-                      }}
-                      className="hover:bg-[#1f2937] transition-colors"
-                    >
-                      Upgrade
-                    </button>
-                  </div>
-
-                  <div style={{ 
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-                    padding: '1.25rem', border: '1px solid #1a2235', borderRadius: '12px'
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: 600 }}>Unlimited</div>
-                      <div style={{ fontSize: '13px', color: '#8899aa' }}>$19/month • Unlimited decks</div>
-                    </div>
-                    <button 
-                      onClick={() => navigate('/#pricing')}
-                      style={{ 
-                        background: '#1a2235', color: '#eef6ff', border: 'none', borderRadius: '8px', 
-                        padding: '8px 20px', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
-                      }}
-                      className="hover:bg-[#1f2937] transition-colors"
-                    >
-                      Upgrade
-                    </button>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
           )}
 
           {activeTab === 'danger' && (
-            <div>
-              <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '2rem' }}>Danger Zone</h2>
+            <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
+              <h2 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '32px', color: '#eef6ff' }}>Danger Zone</h2>
               
-              <div style={{ background: '#0f1420', border: '1px solid #1a2235', borderRadius: '16px', padding: '32px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '2rem' }}>
+              <div style={{ background: '#0f1420', border: '1px solid #ef444433', borderRadius: '16px', padding: '40px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '32px' }}>
                   <div style={{ flex: 1 }}>
-                    <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#ef4444', marginBottom: '0.5rem' }}>Delete account</h3>
-                    <p style={{ fontSize: '14px', color: '#8899aa', lineHeight: 1.6 }}>
-                      Permanently delete your account and all associated data. This action cannot be undone.
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#ef4444', marginBottom: '8px', margin: '0 0 8px 0' }}>Delete account</h3>
+                    <p style={{ fontSize: '14px', color: '#8899aa', lineHeight: 1.6, margin: 0 }}>
+                      Permanently delete your account and all associated data. This action is irreversible and you will lose access to all your generated content.
                     </p>
                   </div>
                   <button 
                     onClick={() => setShowDeleteModal(true)}
                     style={{ 
-                      background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', fontWeight: 600, 
-                      cursor: 'pointer', padding: 0, whiteSpace: 'nowrap', marginTop: '4px'
+                      background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', 
+                      color: '#ef4444', fontSize: '14px', fontWeight: 600, 
+                      cursor: 'pointer', padding: '12px 24px', borderRadius: '8px',
+                      transition: 'all 0.2s ease'
                     }}
-                    className="hover:underline"
+                    className="hover:bg-[#ef4444] hover:text-white"
                   >
-                    I want to delete my account
+                    Delete Account
                   </button>
                 </div>
               </div>
@@ -366,22 +396,23 @@ export default function AccountPage() {
       {showDeleteModal && (
         <div style={{ 
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          background: 'rgba(7,9,15,0.85)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1.5rem'
+          background: 'rgba(7,9,15,0.9)', backdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '24px'
         }}>
           <div style={{ 
             background: '#0f1420', border: '1px solid #1a2235', borderRadius: '24px', 
-            padding: '32px', maxWidth: '400px', width: '100%', textAlign: 'center'
+            padding: '40px', maxWidth: '440px', width: '100%', textAlign: 'center',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
           }}>
             <div style={{ 
-              width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)',
+              width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444',
-              margin: '0 auto 20px'
+              margin: '0 auto 24px'
             }}>
-              <AlertTriangle size={28} />
+              <AlertTriangle size={32} />
             </div>
-            <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#eef6ff', marginBottom: '12px' }}>Are you absolutely sure?</h3>
-            <p style={{ fontSize: '14px', color: '#8899aa', marginBottom: '32px', lineHeight: 1.6 }}>
+            <h3 style={{ fontSize: '24px', fontWeight: 700, color: '#eef6ff', marginBottom: '16px', margin: '0 0 16px 0' }}>Are you absolutely sure?</h3>
+            <p style={{ fontSize: '15px', color: '#8899aa', marginBottom: '40px', lineHeight: 1.6, margin: '0 0 40px 0' }}>
               This action is permanent and will delete all your data. You will lose access to all generated decks.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -390,21 +421,23 @@ export default function AccountPage() {
                 disabled={isDeleting}
                 style={{ 
                   width: '100%', background: '#ef4444', color: '#ffffff', border: 'none', borderRadius: '12px', 
-                  padding: '14px', fontSize: '15px', fontWeight: 600, cursor: isDeleting ? 'not-allowed' : 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                  padding: '16px', fontSize: '16px', fontWeight: 600, cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  transition: 'background 0.2s ease'
                 }}
-                className="hover:bg-[#dc2626] transition-colors"
+                className="hover:bg-[#dc2626]"
               >
-                {isDeleting ? <Loader2 size={18} className="animate-spin" /> : 'Yes, Delete Account'}
+                {isDeleting ? <Loader2 size={20} className="animate-spin" /> : 'Yes, Delete Account'}
               </button>
               <button 
                 onClick={() => setShowDeleteModal(false)}
                 disabled={isDeleting}
                 style={{ 
-                  width: '100%', background: 'none', color: '#8899aa', border: 'none', borderRadius: '12px', 
-                  padding: '12px', fontSize: '14px', fontWeight: 500, cursor: isDeleting ? 'not-allowed' : 'pointer'
+                  width: '100%', background: 'transparent', color: '#8899aa', border: 'none', borderRadius: '12px', 
+                  padding: '14px', fontSize: '15px', fontWeight: 500, cursor: isDeleting ? 'not-allowed' : 'pointer',
+                  transition: 'color 0.2s ease'
                 }}
-                className="hover:text-[#eef6ff] transition-colors"
+                className="hover:text-[#eef6ff]"
               >
                 Cancel
               </button>
@@ -412,6 +445,13 @@ export default function AccountPage() {
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
