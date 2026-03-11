@@ -410,13 +410,13 @@ export default function HomePage() {
             {step === 'upload' && (
               <>
                 <h1>Turn medical materials into<br/><span className="icy">Anki flashcards</span></h1>
-                <p className="hero-sub" style={{ marginBottom: '32px' }}>
+                <p className="hero-sub" style={{ marginBottom: '20px' }}>
                   The essential tool for medical school and beyond. Convert lectures, textbooks, and research papers into optimized decks in seconds.
                 </p>
                 <motion.div 
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-[10px] font-bold uppercase tracking-widest mb-8"
+                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-[10px] font-bold uppercase tracking-widest mb-4"
                 >
                   <Zap size={10} />
                   For Students, Residents & Fellows

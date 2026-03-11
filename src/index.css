@@ -85,7 +85,7 @@ nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 48px;
+  padding: 12px 48px;
   transition: background-color 0.3s, backdrop-filter 0.3s, border-bottom 0.3s, padding 0.3s;
   border-bottom: 1px solid transparent;
 }
@@ -94,7 +94,7 @@ nav.nav-scrolled {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
-  padding: 14px 48px;
+  padding: 10px 48px;
 }
 nav.nav-open {
   background-color: var(--bg) !important;
@@ -164,7 +164,7 @@ nav.nav-open {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 120px 24px 60px;
+  padding: 60px 24px 30px;
   position: relative;
   z-index: 1;
   text-align: center;
@@ -172,7 +172,7 @@ nav.nav-open {
 }
 @media (max-width: 768px) {
   .hero {
-    padding-top: 100px;
+    padding-top: 80px;
     justify-content: flex-start;
   }
 }
@@ -182,25 +182,25 @@ nav.nav-open {
   letter-spacing: 2px;
   text-transform: uppercase;
   color: var(--muted2);
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   opacity: 0;
   animation: up 0.6s 0.05s forwards;
 }
 h1 {
-  font-size: clamp(32px, 8vw, 60px);
+  font-size: clamp(32px, 8vw, 54px);
   font-weight: 800;
   line-height: 1.0;
   letter-spacing: -2px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   opacity: 0;
   animation: up 0.6s 0.15s forwards;
 }
 .hero-sub {
-  font-size: 16px;
+  font-size: 15px;
   color: var(--muted2);
-  line-height: 1.65;
-  max-width: 600px;
-  margin: 0 auto 48px;
+  line-height: 1.5;
+  max-width: 580px;
+  margin: 0 auto 20px;
   opacity: 0;
   animation: up 0.6s 0.2s forwards;
 }
@@ -218,7 +218,7 @@ h1 {
   background: var(--surface);
   border: 1px solid rgba(125, 211, 252, 0.18);
   border-radius: 24px;
-  padding: 36px;
+  padding: 28px 36px;
   box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.04), 0 32px 80px rgba(0, 0, 0, 0.6), 0 0 60px rgba(56, 189, 248, 0.06);
   opacity: 0;
   animation: up 0.7s 0.3s forwards;
@@ -249,11 +249,11 @@ h1 {
 .upload-zone {
   border: 1.5px dashed rgba(125, 211, 252, 0.25);
   border-radius: 14px;
-  padding: 32px 20px;
+  padding: 24px 20px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   background: rgba(125, 211, 252, 0.02);
 }
 .upload-zone:hover {
