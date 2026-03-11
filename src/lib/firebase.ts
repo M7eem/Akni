@@ -28,5 +28,5 @@ export const db = getFirestore(app);
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
-  prompt: 'consent'
+  prompt: 'select_account'
 });
