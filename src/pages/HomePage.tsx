@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon, History, Link, Twitter, Github, Linkedin, ChevronDown } from 'lucide-react';
+import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon, History, Link, Twitter, Github, Linkedin, ChevronDown, Menu } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import LabelEditorStep, { Label } from '../components/LabelEditorStep';
 import AuthButton from '../components/AuthButton';
@@ -128,6 +128,7 @@ export default function HomePage() {
   const [scrolled, setScrolled] = useState(false);
   const [showSignUpModal, setShowSignUpModal] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -366,7 +367,7 @@ export default function HomePage() {
       <div className="orb orb1"></div>
       <div className="orb orb2"></div>
 
-      <nav className={scrolled ? 'nav-scrolled' : ''}>
+      <nav className={`${scrolled ? 'nav-scrolled' : ''} ${mobileMenuOpen ? 'nav-open' : ''}`}>
         <a href="/" className="logo" style={{ textDecoration: 'none' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.5px', color: '#eef6ff' }}>
             <div style={{ position: 'relative', width: '30px', height: '24px', flexShrink: 0 }}>
@@ -378,17 +379,28 @@ export default function HomePage() {
             Ankit
           </div>
         </a>
-        <div className="nav-links flex items-center gap-6">
-          <a href="#preview">Preview</a>
-          <a href="#how">How it works</a>
-          <a href="#features">Features</a>
-          <a href="#pricing">Pricing</a>
+
+        {/* Mobile Toggle */}
+        <button 
+          className="md:hidden p-2 text-[#8899aa] hover:text-[#eef6ff] transition-colors"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+
+        <div className={`nav-links flex items-center gap-6 ${mobileMenuOpen ? 'nav-links-mobile' : ''}`}>
+          <a href="#preview" onClick={() => setMobileMenuOpen(false)}>Preview</a>
+          <a href="#how" onClick={() => setMobileMenuOpen(false)}>How it works</a>
+          <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
+          <a href="#pricing" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
           {!user && (
-            <a href="/auth" className="text-[13px] font-medium text-[#8899aa] hover:text-[#eef6ff] transition-colors">
+            <a href="/auth" className="text-[13px] font-medium text-[#8899aa] hover:text-[#eef6ff] transition-colors" onClick={() => setMobileMenuOpen(false)}>
               Log in
             </a>
           )}
-          <AuthButton />
+          <div onClick={() => setMobileMenuOpen(false)}>
+            <AuthButton />
+          </div>
         </div>
       </nav>
 
@@ -397,9 +409,17 @@ export default function HomePage() {
           <>
             {step === 'upload' && (
               <>
-                <h1>Turn your lectures into<br/><span className="icy">Anki flashcards</span></h1>
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-[10px] font-bold uppercase tracking-widest mb-6"
+                >
+                  <Zap size={10} />
+                  For Students, Residents & Fellows
+                </motion.div>
+                <h1>Turn medical materials into<br/><span className="icy">Anki flashcards</span></h1>
                 <p className="hero-sub" style={{ marginBottom: '48px' }}>
-                  Upload a PDF or PPTX and get a complete Anki deck in under a minute.
+                  The essential tool for medical school and beyond. Convert lectures, textbooks, and research papers into optimized decks in seconds.
                 </p>
               </>
             )}
@@ -439,8 +459,8 @@ export default function HomePage() {
                   <div className="upload-zone-icon">
                     <Upload size={22} />
                   </div>
-                  <h3>Drag & drop your lecture or book here</h3>
-                  <p>or click to upload</p>
+                  <h3>Drag & drop any material here</h3>
+                  <p>Lectures, books, or research papers (PDF, PPTX)</p>
                   <p style={{ fontSize: '12px', color: '#8899aa', marginTop: '8px' }}>Max file size: 50MB. Supports up to 100 pages.</p>
                 </div>
 
@@ -718,8 +738,8 @@ export default function HomePage() {
         >
           <div className="step">
             <span className="step-n">01</span>
-            <div className="step-title">Upload your file</div>
-            <div className="step-desc">PDF or PPTX. Upload multiple files at once. Text and images extracted automatically.</div>
+            <div className="step-title">Upload your material</div>
+            <div className="step-desc">Lectures, textbooks, or research papers in PDF or PPTX. Upload multiple files at once.</div>
           </div>
           <div className="step">
             <span className="step-n">02</span>
@@ -739,7 +759,7 @@ export default function HomePage() {
       <section className="section" id="features">
         <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }}>
           <div className="section-tag">Features</div>
-          <div className="section-h">Built for serious students</div>
+          <div className="section-h">Built for medical mastery</div>
         </motion.div>
         <motion.div 
           className="features"
@@ -747,13 +767,13 @@ export default function HomePage() {
         >
           <div className="feat">
             <div className="feat-icon"><Zap size={18} /></div>
-            <div className="feat-title">Understands your content</div>
-            <div className="feat-desc">Generates cards that test mechanisms and understanding, not just definitions.</div>
+            <div className="feat-title">Clinical understanding</div>
+            <div className="feat-desc">Generates cards that test mechanisms and clinical reasoning, not just definitions.</div>
           </div>
           <div className="feat">
             <div className="feat-icon"><ImageIcon size={18} /></div>
-            <div className="feat-title">Image Occlusion</div>
-            <div className="feat-desc">Detects every label on anatomy diagrams and creates one card per structure.</div>
+            <div className="feat-title">Anatomy & Histology</div>
+            <div className="feat-desc">Detects labels on anatomy diagrams and histology slides, creating one card per structure.</div>
           </div>
           <div className="feat">
             <div className="feat-icon"><FileText size={18} /></div>
@@ -949,7 +969,7 @@ export default function HomePage() {
                 </div>
               </a>
               <p className="text-[#8899aa] text-[11px] font-bold uppercase tracking-[0.2em] leading-relaxed max-w-xs">
-                AI-Powered Flashcards for Serious Students
+                AI-Powered Flashcards for Medical Mastery
               </p>
             </div>
 

@@ -228,7 +228,7 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
       </div>
 
       {/* Image + Labels */}
-      <div className="bg-[#131820] rounded-xl overflow-auto flex justify-center p-4 border border-[rgba(255,255,255,0.05)]">
+      <div className="bg-[#131820] rounded-xl overflow-auto flex justify-center p-4 border border-[rgba(255,255,255,0.05)] label-editor-container">
         <div
           ref={containerRef}
           className={`relative inline-block select-none ${adding ? 'cursor-crosshair' : ''}`}
@@ -238,7 +238,7 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
           <img
             src={currentImage.src}
             alt={currentImage.name}
-            className="max-w-full max-h-[500px] w-auto h-auto block shadow-md rounded"
+            className="max-w-full max-h-[500px] w-auto h-auto block shadow-md rounded label-editor-image"
             draggable={false}
             decoding="async"
           />
@@ -304,7 +304,7 @@ export default function LabelEditorStep({ images, onSave, onBack }: Props) {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap gap-2 p-2 bg-[#0d1117] rounded-xl border border-[rgba(255,255,255,0.05)] shadow-sm">
+      <div className="flex flex-wrap gap-2 p-2 bg-[#0d1117] rounded-xl border border-[rgba(255,255,255,0.05)] shadow-sm label-editor-toolbar">
         <button
           onClick={() => { setAdding(!adding); setSelectedIds(new Set()); }}
           className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors

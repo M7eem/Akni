@@ -214,18 +214,9 @@ export const PreviewSection = () => {
         transition={{ duration: 0.6, delay: 0.15 }}
         style={{ marginTop: '48px', width: '100%', maxWidth: '860px', margin: '48px auto 0' }}
       >
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 48px 1fr',
-          background: '#07090f',
-          borderRadius: '24px',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          overflow: 'hidden',
-          boxShadow: '0 24px 48px rgba(0,0,0,0.5)',
-          height: '520px'
-        }}>
+        <div className="preview-container">
           {/* LEFT */}
-          <div style={{ borderRight: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column' }}>
+          <div className="preview-panel preview-left">
             <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'rgba(125,211,252,0.15)', border: '1px solid rgba(125,211,252,0.2)' }} />
               <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#8899aa' }}>Source</span>
@@ -237,16 +228,16 @@ export const PreviewSection = () => {
           </div>
 
           {/* MIDDLE */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07090f', position: 'relative' }}>
+          <div className="preview-divider">
             {/* Animated line connecting left to right */}
-            <div style={{ position: 'absolute', width: '100%', height: '2px', background: 'rgba(125,211,252,0.05)', top: '50%', transform: 'translateY(-50%)' }} />
+            <div className="preview-divider-line" />
             <AnimatePresence>
               {active && (
                 <motion.div
                   initial={{ left: '10%', opacity: 0 }}
                   animate={{ left: '90%', opacity: [0, 1, 1, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                  style={{ position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)', width: '30px', height: '2px', background: 'linear-gradient(90deg, transparent, #7dd3fc, transparent)', boxShadow: '0 0 8px #7dd3fc' }}
+                  className="preview-divider-glow"
                 />
               )}
             </AnimatePresence>
@@ -255,14 +246,14 @@ export const PreviewSection = () => {
               transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', zIndex: 1 }}
             >
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#07090f', border: '1px solid rgba(125,211,252,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 12px rgba(125,211,252,0.15)' }}>
+              <div className="preview-divider-icon">
                 <ChevronRight size={14} color='#7dd3fc' />
               </div>
             </motion.div>
           </div>
 
           {/* RIGHT */}
-          <div style={{ borderLeft: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', flexDirection: 'column' }}>
+          <div className="preview-panel preview-right">
             <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7dd3fc', boxShadow: '0 0 8px rgba(125,211,252,0.4)' }} />
               <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: '#7dd3fc' }}>Generated Cards</span>
