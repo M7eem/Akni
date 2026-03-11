@@ -411,7 +411,7 @@ export default function HomePage() {
               <>
                 <h1>Turn medical materials into<br/><span className="icy">Anki flashcards</span></h1>
                 <p className="hero-sub" style={{ marginBottom: '20px' }}>
-                  The essential tool for medical school and beyond. Convert lectures, textbooks, and research papers into optimized decks in seconds.
+                  Convert lectures, textbooks, and notes into optimized decks in seconds using AI
                 </p>
                 <motion.div 
                   initial={{ opacity: 0, y: -10 }}
@@ -513,10 +513,15 @@ export default function HomePage() {
                     ].map(({ id, label, locked }) => (
                       <button
                         key={id}
-                        className={`type-btn ${cardTypes.includes(id) ? 'on' : ''} ${locked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`type-btn ${cardTypes.includes(id) ? 'on' : ''} ${locked ? 'opacity-70' : ''}`}
                         onClick={() => {
                           if (locked) {
-                            navigate('/#pricing');
+                            const el = document.getElementById('pricing');
+                            if (el) {
+                              el.scrollIntoView({ behavior: 'smooth' });
+                            } else {
+                              navigate('/#pricing');
+                            }
                             return;
                           }
                           setCardTypes(prev => prev.includes(id) ? (prev.length > 1 ? prev.filter(t => t !== id) : prev) : [...prev, id]);

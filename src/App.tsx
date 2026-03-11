@@ -6,11 +6,13 @@ import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import LogoExportPage from './pages/LogoExportPage';
 import ScrollToTop from './components/ScrollToTop';
+import ScrollToTopButton from './components/ScrollToTopButton';
 
 export default function App() {
   return (
     <>
       <ScrollToTop />
+      <ScrollToTopButton />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/auth" element={<AuthPage />} />
