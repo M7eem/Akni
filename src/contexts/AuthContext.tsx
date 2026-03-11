@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { 
   User, 
-  signInWithRedirect, 
-  getRedirectResult, 
+  signInWithPopup, 
   signOut as firebaseSignOut, 
   setPersistence, 
   browserLocalPersistence,
@@ -45,17 +44,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error("Error setting persistence:", error);
       }
 
-      // Handle redirect result FIRST and wait for it
-      try {
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          console.log("Redirect result user:", result.user.email);
-        }
-      } catch (error: any) {
-        console.error("Redirect result error:", error.code, error.message);
-      }
-
-      // Then set up auth state listener
+      // Set up auth state listener
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         console.log("Auth state changed:", firebaseUser?.email || 'Logged out');
         setUser(firebaseUser);
@@ -110,13 +99,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => { if (unsubscribe) unsubscribe(); };
   }, []);
 
-  // signInWithGoogle no longer creates the doc — onAuthStateChanged handles all users
   const signInWithGoogle = async () => {
     if (isSigningInRef.current) return;
     isSigningInRef.current = true;
-    console.log("Starting Google sign in with redirect...");
+    console.log("Starting Google sign in with popup...");
     try {
-      await signInWithRedirect(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log("Sign in successful:", result?.user?.email);
     } catch (error: any) {
       console.log("Sign in error code:", error.code);
       console.log("Sign in error message:", error.message);
