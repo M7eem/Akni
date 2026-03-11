@@ -90,8 +90,8 @@ export default function TermsPage() {
                   Ankit offers free and paid (Pro) tiers. 
                 </p>
                 <ul className="list-disc pl-5 space-y-2">
-                  <li><strong>Billing:</strong> Subscriptions are billed in advance on a recurring basis via Paddle, our Merchant of Record.</li>
-                  <li><strong>Refunds:</strong> We offer a 30-day money-back guarantee. If you are not satisfied with the service, you can request a full refund within 30 days of your initial purchase.</li>
+                  <li><strong>Billing:</strong> Subscriptions are billed in advance on a recurring basis via Paddle, our Merchant of Record. Paddle is responsible for all customer service inquiries and returns.</li>
+                  <li><strong>Refunds:</strong> We offer a 14-day money-back guarantee. If you are not satisfied with the service, you can request a full refund within 14 days of your initial purchase by contacting us or Paddle directly.</li>
                   <li><strong>Fair Use:</strong> "Unlimited" generation is subject to a fair use policy to prevent system abuse.</li>
                 </ul>
               </div>

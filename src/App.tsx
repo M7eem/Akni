@@ -4,6 +4,7 @@ import AuthPage from './pages/AuthPage';
 import AccountPage from './pages/AccountPage';
 import TermsPage from './pages/TermsPage';
 import PrivacyPage from './pages/PrivacyPage';
+import LogoExportPage from './pages/LogoExportPage';
 import ScrollToTop from './components/ScrollToTop';
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/account" element={<AccountPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/export-logo" element={<LogoExportPage />} />
       </Routes>
     </>
   );

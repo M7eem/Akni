@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon, History, Link, Twitter, Github, Linkedin } from 'lucide-react';
+import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon, History, Link, Twitter, Github, Linkedin, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import LabelEditorStep, { Label } from '../components/LabelEditorStep';
 import AuthButton from '../components/AuthButton';
@@ -70,6 +70,44 @@ const LoadingScreen = ({ status }: { status: Status }) => {
     </div>
   );
 };
+
+interface FAQItemProps {
+  question: string;
+  answer: string;
+}
+
+const FAQItem: React.FC<FAQItemProps> = ({ question, answer }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="border border-white/5 rounded-2xl overflow-hidden bg-white/[0.02] transition-all hover:bg-white/[0.04]">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-6 py-5 flex items-center justify-between text-left group"
+      >
+        <span className="font-bold text-[#eef6ff] group-hover:text-sky-400 transition-colors">{question}</span>
+        <ChevronDown 
+          size={20} 
+          className={`text-[#8899aa] transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} 
+        />
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
+          >
+            <div className="px-6 pb-6 text-[#8899aa] text-sm leading-relaxed">
+              {answer}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 export default function HomePage() {
   const [files, setFiles] = useState<UploadedFile[]>([]);
@@ -847,6 +885,50 @@ export default function HomePage() {
               Go Max
             </button>
           </motion.div>
+        </div>
+
+        {/* FAQ Section */}
+        <div id="faq" className="mt-32 max-w-3xl mx-auto">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4">Frequently Asked Questions</h2>
+            <p className="text-[#8899aa] font-medium">Everything you need to know about Ankit.</p>
+          </motion.div>
+
+          <div className="space-y-4">
+            {[
+              {
+                q: "What file formats are supported?",
+                a: "Ankit currently supports PDF and PPTX (PowerPoint) files. We are working on adding support for Word documents and images in the near future."
+              },
+              {
+                q: "How does the AI generate flashcards?",
+                a: "Our AI analyzes your lecture slides and notes to identify key concepts, definitions, and relationships. It then creates optimized flashcards using active recall principles like Cloze deletions and Image Occlusion."
+              },
+              {
+                q: "Can I export the decks to Anki?",
+                a: "Yes! Every deck generated can be downloaded as a standard .apkg file, which you can import directly into Anki on Desktop, Mobile, or AnkiWeb."
+              },
+              {
+                q: "Is there a limit on file size?",
+                a: "Free users can upload files up to 10MB. Pro and Max users enjoy higher limits up to 50MB per file to accommodate large medical or law textbooks."
+              },
+              {
+                q: "What is your refund policy?",
+                a: "Our payments are processed by Paddle, our Merchant of Record. We offer a 14-day 'no questions asked' refund policy for all new subscriptions. If you're not satisfied, just contact us or Paddle support within 14 days of your purchase."
+              },
+              {
+                q: "Is my data secure?",
+                a: "Absolutely. Your uploaded files are processed securely and are only used to generate your flashcards. We do not sell your data or use your private materials to train our models."
+              }
+            ].map((item, i) => (
+              <FAQItem key={i} question={item.q} answer={item.a} />
+            ))}
+          </div>
         </div>
       </section>
 
