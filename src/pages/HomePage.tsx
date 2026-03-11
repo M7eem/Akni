@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon, History, Link } from 'lucide-react';
+import { Upload, FileText, X, Loader2, Download, CheckCircle, AlertCircle, Lock, Zap, ArrowRight, Image as ImageIcon, History, Link, Twitter, Github, Linkedin } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import LabelEditorStep, { Label } from '../components/LabelEditorStep';
 import AuthButton from '../components/AuthButton';
@@ -850,26 +850,70 @@ export default function HomePage() {
         </div>
       </section>
 
-      <footer>
-        <div className="flex flex-col items-center gap-6">
-          <a href="/" className="logo" style={{ fontSize: '15px', textDecoration: 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontWeight: 800, letterSpacing: '-0.5px', color: '#eef6ff' }}>
-              <div style={{ position: 'relative', width: '22px', height: '16px', flexShrink: 0 }}>
-                <div style={{ position: 'absolute', width: '16px', height: '11px', background: 'rgba(125,211,252,0.2)', border: '1px solid rgba(125,211,252,0.4)', borderRadius: '3px', top: 0, left: '5px' }} />
-                <div style={{ position: 'absolute', width: '16px', height: '11px', background: '#131820', border: '1px solid rgba(125,211,252,0.6)', borderRadius: '3px', bottom: 0, left: 0 }}>
-                  <div style={{ position: 'absolute', top: '3px', left: '3px', right: '3px', height: '2px', borderRadius: '1px', background: 'rgba(125,211,252,0.5)' }} />
+      <footer className="bg-[#05060a] pt-20 pb-10 border-t border-white/5">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 mb-16">
+            {/* Logo & Slogan Column */}
+            <div className="lg:col-span-2">
+              <a href="/" className="logo mb-6 block" style={{ fontSize: '24px', textDecoration: 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 800, letterSpacing: '-0.5px', color: '#eef6ff' }}>
+                  <div style={{ position: 'relative', width: '30px', height: '22px', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', width: '22px', height: '15px', background: 'rgba(125,211,252,0.2)', border: '1px solid rgba(125,211,252,0.4)', borderRadius: '4px', top: 0, left: '7px' }} />
+                    <div style={{ position: 'absolute', width: '22px', height: '15px', background: '#131820', border: '1px solid rgba(125,211,252,0.6)', borderRadius: '4px', bottom: 0, left: 0 }}>
+                      <div style={{ position: 'absolute', top: '4px', left: '4px', right: '4px', height: '2px', borderRadius: '1px', background: 'rgba(125,211,252,0.5)' }} />
+                    </div>
+                  </div>
+                  Ankit
                 </div>
-              </div>
-              Ankit
+              </a>
+              <p className="text-[#8899aa] text-[11px] font-bold uppercase tracking-[0.2em] leading-relaxed max-w-xs">
+                AI-Powered Flashcards for Serious Students
+              </p>
             </div>
-          </a>
-          <p className="text-[#8899aa] text-sm">Made for students who take studying seriously.</p>
-          <div className="flex items-center gap-6 text-xs font-medium text-[#8899aa]">
-            <a href="/terms" className="hover:text-[#eef6ff] transition-colors">Terms of Service</a>
-            <a href="/privacy" className="hover:text-[#eef6ff] transition-colors">Privacy Policy</a>
-            <a href="mailto:support@ankit.study" className="hover:text-[#eef6ff] transition-colors">Support</a>
+
+            {/* Links Columns */}
+            <div>
+              <h4 className="text-[#eef6ff] text-[11px] font-bold uppercase tracking-[0.2em] mb-6">Product</h4>
+              <ul className="space-y-4">
+                <li><a href="#features" className="text-[#8899aa] hover:text-sky-400 text-[11px] uppercase tracking-wider transition-colors">Features</a></li>
+                <li><a href="#pricing" className="text-[#8899aa] hover:text-sky-400 text-[11px] uppercase tracking-wider transition-colors">Pricing</a></li>
+                <li><a href="#faq" className="text-[#8899aa] hover:text-sky-400 text-[11px] uppercase tracking-wider transition-colors">FAQ</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-[#eef6ff] text-[11px] font-bold uppercase tracking-[0.2em] mb-6">Legal</h4>
+              <ul className="space-y-4">
+                <li><a href="/terms" className="text-[#8899aa] hover:text-sky-400 text-[11px] uppercase tracking-wider transition-colors">Terms of Service</a></li>
+                <li><a href="/privacy" className="text-[#8899aa] hover:text-sky-400 text-[11px] uppercase tracking-wider transition-colors">Privacy Policy</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-[#eef6ff] text-[11px] font-bold uppercase tracking-[0.2em] mb-6">Support</h4>
+              <ul className="space-y-4">
+                <li><a href="mailto:support@ankit.study" className="text-[#8899aa] hover:text-sky-400 text-[11px] uppercase tracking-wider transition-colors">Contact Us</a></li>
+                <li><a href="/#faq" className="text-[#8899aa] hover:text-sky-400 text-[11px] uppercase tracking-wider transition-colors">Help Center</a></li>
+              </ul>
+            </div>
           </div>
-          <p className="text-[10px] text-[#8899aa]/50 uppercase tracking-widest mt-4">© 2026 Ankit. All rights reserved.</p>
+
+          <div className="h-px bg-white/5 w-full mb-12"></div>
+
+          <div className="flex flex-col items-center">
+            <div className="flex gap-4 mb-8">
+              {[Twitter, Github, Linkedin].map((Icon, i) => (
+                <a 
+                  key={i} 
+                  href="#" 
+                  className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-[#8899aa] hover:border-sky-400 hover:text-sky-400 transition-all"
+                >
+                  <Icon size={18} />
+                </a>
+              ))}
+            </div>
+            <p className="text-[11px] text-[#8899aa]/50 uppercase tracking-[0.2em]">© 2026 Ankit. All rights reserved.</p>
+          </div>
         </div>
       </footer>
 

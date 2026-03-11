@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Shield, Scale, FileText, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Shield, Scale, FileText, AlertCircle, Twitter, Github, Linkedin } from 'lucide-react';
 
 export default function TermsPage() {
   return (
@@ -118,12 +118,26 @@ export default function TermsPage() {
         </motion.div>
       </main>
 
-      <footer className="max-w-3xl mx-auto px-6 py-12 border-t border-white/5 text-center">
-        <div className="flex justify-center gap-6 mb-4">
-          <a href="/terms" className="text-xs text-sky-400 font-bold">Terms of Service</a>
-          <a href="/privacy" className="text-xs text-[#8899aa] hover:text-sky-400 transition-colors">Privacy Policy</a>
+      <footer className="max-w-7xl mx-auto px-6 py-12 border-t border-white/5">
+        <div className="flex flex-col items-center">
+          <div className="flex gap-4 mb-8">
+            {[Twitter, Github, Linkedin].map((Icon, i) => (
+              <a 
+                key={i} 
+                href="#" 
+                className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-[#8899aa] hover:border-sky-400 hover:text-sky-400 transition-all"
+              >
+                <Icon size={18} />
+              </a>
+            ))}
+          </div>
+          <div className="flex justify-center gap-6 mb-6">
+            <a href="/terms" className="text-[11px] uppercase tracking-wider text-sky-400 font-bold">Terms of Service</a>
+            <a href="/privacy" className="text-[11px] uppercase tracking-wider text-[#8899aa] hover:text-sky-400 transition-colors">Privacy Policy</a>
+            <a href="mailto:support@ankit.study" className="text-[11px] uppercase tracking-wider text-[#8899aa] hover:text-sky-400 transition-colors">Support</a>
+          </div>
+          <p className="text-[11px] text-[#8899aa]/50 uppercase tracking-[0.2em]">© 2026 Ankit. All rights reserved.</p>
         </div>
-        <p className="text-xs text-[#8899aa]">© 2026 Ankit. All rights reserved.</p>
       </footer>
     </div>
   );
