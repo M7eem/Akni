@@ -14,80 +14,8 @@ export async function generateFlashcards(
   return generateWithClient(ai, text, images, deckName, cardTypes);
 }
 
-async function generateWithClient(
-  ai: GoogleGenAI,
-  text: string,
-  images: Record<string, Buffer>,
-  deckName: string,
-  cardTypes: string[]
-) {
-  const modelPass1 = 'gemini-3-flash-preview';    // Flash — bulk generation, cost efficient
-  const modelPass2 = 'gemini-3.1-pro-preview';    // Pro — gap audit, nuanced reasoning
-
-  // Build the strict card type restriction block dynamically
-  const allowedTypesText = cardTypes.join(', ');
-  const noBasicRule = !cardTypes.includes('basic') ? '- Do NOT generate any "basic" type cards. Zero. None.' : '';
-  const noClozeRule = !cardTypes.includes('cloze') ? '- Do NOT generate any "cloze" type cards. Zero. None.' : '';
-
-  const cardTypeRestriction = `
-════════════════════════════════════════════════════════════
-STRICT CARD TYPE RESTRICTION — THIS OVERRIDES EVERYTHING ELSE
-════════════════════════════════════════════════════════════
-You are ONLY allowed to generate cards of these types: ${allowedTypesText}
-ANY card type not in this list is STRICTLY FORBIDDEN and must not appear in your output.
-${noBasicRule}
-${noClozeRule}
-This restriction is absolute and cannot be overridden by any other instruction in this prompt.
-`;
-
-  const pass1Prompt = `
-You are a world-class medical education specialist and board exam question writer with 20 years of experience creating high-yield study material for medical students, residents, and fellows across all specialties.
-
-Your job is to convert ANY medical source into the highest-yield Anki flashcard deck possible — the kind that makes a learner score in the top 10% on their exam, pass their boards, or perform better at the bedside.
-
-${cardTypeRestriction}
-
-════════════════════════════════════════════════════════════
-STEP 1 — DETECT THE SOURCE
-════════════════════════════════════════════════════════════
-
-Before generating a single card, identify the following:
-
-SOURCE TYPE — which of these best describes the content?
-- Lecture slides (anatomy, physiology, biochemistry, pathology, pharmacology, microbiology, immunology)
-- Textbook chapter (mechanism-heavy, comprehensive)
-- Clinical guideline (AHA, ESC, WHO, NICE, UpToDate)
-- Journal article or research paper (study design, findings, NNT, p-values)
-- Clinical case or PBL case
-- Drug formulary or pharmacology reference
-- Surgical atlas or procedural guide
-- Board exam review material (First Aid, Amboss, Passmedicine)
-- Revision notes or summary sheet
-- Biostatistics or epidemiology material
-- Nutrition, biochemistry, or molecular biology material
-- Radiology or imaging material
-- Subspecialty fellowship material
-
-AUDIENCE LEVEL — who is this for?
-- Medical student (Year 1-2): focus on mechanisms, pathways, basic science
-- Medical student (Year 3-4): focus on clinical reasoning, presentations, differentials
-- Resident: focus on management, guidelines, decision making, complications
-- Fellow: focus on subspecialty depth, landmark trials, protocols, nuance
-
-DENSITY — how much content is present?
-- Short / focused → 15 to 25 cards
-- Medium → 25 to 50 cards
-- Long / dense → 50 to 100 cards
-- Very dense (textbook chapter, guideline) → 100 to 150 cards
-Let the SOURCE decide — never pad, never miss a high-yield concept.
-
-════════════════════════════════════════════════════════════
-STEP 2 — ADAPT YOUR QUESTION STYLE TO THE SOURCE
-════════════════════════════════════════════════════════════
-
-Based on what you detected in Step 1, use the matching question style set below.
-Remember: only generate card types listed in the STRICT CARD TYPE RESTRICTION above.
-
+const sourceTypeInstructions: Record<string, string> = {
+  "Anatomy": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Anatomy
 ──────────────────────────────────────────────
@@ -96,8 +24,8 @@ IF SOURCE IS: Anatomy
 3. "How does structure X relate to structure Y anatomically and clinically?"
 4. "Trace the pathway of X from origin to termination"
 5. "What passes through / supplies / drains X?"
-Cloze: hide the structure name, nerve, artery, or level
-
+Cloze: hide the structure name, nerve, artery, or level`,
+  "Physiology": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Physiology
 ──────────────────────────────────────────────
@@ -106,8 +34,8 @@ IF SOURCE IS: Physiology
 3. "Trace the pathway of X step by step from trigger to outcome"
 4. "How does the body compensate when X is disrupted?"
 5. "A patient presents with X — what physiological mechanism explains this?"
-Cloze: hide the key mediator, receptor, or outcome value
-
+Cloze: hide the key mediator, receptor, or outcome value`,
+  "Biochemistry or Nutrition": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Biochemistry or Nutrition
 ──────────────────────────────────────────────
@@ -116,8 +44,8 @@ IF SOURCE IS: Biochemistry or Nutrition
 3. "Trace the pathway of X — what is produced at each step?"
 4. "What is the rate-limiting step of X and what regulates it?"
 5. "How does X differ from Y metabolically?"
-Cloze: hide the enzyme name, substrate, product, or cofactor
-
+Cloze: hide the enzyme name, substrate, product, or cofactor`,
+  "Pharmacology or Drug Formulary": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Pharmacology or Drug Formulary
 ──────────────────────────────────────────────
@@ -127,8 +55,8 @@ IF SOURCE IS: Pharmacology or Drug Formulary
 4. "A patient on drug X develops Y — what is happening and why?"
 5. "What happens if drug X is given to a patient with condition Y?"
 6. "What is the antidote for X toxicity and why does it work?"
-Cloze: hide the drug name, mechanism target, or dose threshold
-
+Cloze: hide the drug name, mechanism target, or dose threshold`,
+  "Pathology": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Pathology
 ──────────────────────────────────────────────
@@ -137,8 +65,8 @@ IF SOURCE IS: Pathology
 3. "How does type X differ from type Y in mechanism, presentation, and prognosis?"
 4. "What is the classic histological or gross finding in X and why does it appear?"
 5. "What complication arises from X and what is the mechanism?"
-Cloze: hide the pathological finding, marker, or distinguishing feature
-
+Cloze: hide the pathological finding, marker, or distinguishing feature`,
+  "Microbiology or Immunology": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Microbiology or Immunology
 ──────────────────────────────────────────────
@@ -147,8 +75,8 @@ IF SOURCE IS: Microbiology or Immunology
 3. "What is the virulence factor of X and what does it do?"
 4. "How does the immune response to X differ from the response to Y?"
 5. "A patient with deficiency of X presents with recurrent Y — why?"
-Cloze: hide the organism, toxin, immune cell, or cytokine
-
+Cloze: hide the organism, toxin, immune cell, or cytokine`,
+  "Clinical Guideline": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Clinical Guideline
 ──────────────────────────────────────────────
@@ -157,8 +85,8 @@ IF SOURCE IS: Clinical Guideline
 3. "A patient with X, Y, and Z — what does the guideline recommend and why?"
 4. "What is the guideline-recommended workup for X?"
 5. "How did the recommendation for X change and what evidence drove the change?"
-Cloze: hide the threshold value, drug name, or class recommendation
-
+Cloze: hide the threshold value, drug name, or class recommendation`,
+  "Journal Article or Research Paper": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Journal Article or Research Paper
 ──────────────────────────────────────────────
@@ -167,8 +95,8 @@ IF SOURCE IS: Journal Article or Research Paper
 3. "Why was [TRIAL NAME] practice-changing?"
 4. "What was the study design of [TRIAL NAME] and what are its limitations?"
 5. "How did [TRIAL NAME] change the guideline recommendation for X?"
-Cloze: hide the trial name, key finding, NNT value, or p-value
-
+Cloze: hide the trial name, key finding, NNT value, or p-value`,
+  "Biostatistics or Epidemiology": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Biostatistics or Epidemiology
 ──────────────────────────────────────────────
@@ -177,8 +105,8 @@ IF SOURCE IS: Biostatistics or Epidemiology
 3. "What is the difference between type I and type II error in clinical terms?"
 4. "A screening test has high specificity but low sensitivity — in what scenario is it useful?"
 5. "How does relative risk differ from absolute risk reduction — give a clinical example?"
-Cloze: hide the statistical term, formula component, or threshold value
-
+Cloze: hide the statistical term, formula component, or threshold value`,
+  "Radiology or Imaging": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Radiology or Imaging
 ──────────────────────────────────────────────
@@ -187,8 +115,8 @@ IF SOURCE IS: Radiology or Imaging
 3. "How do you distinguish X from Y on imaging — what is the single key differentiating feature?"
 4. "What does contrast enhancement / lack of enhancement in X indicate and why?"
 5. "A scan shows finding X — what is the most likely diagnosis and what is the mechanism?"
-Cloze: hide the imaging finding, modality, or distinguishing feature
-
+Cloze: hide the imaging finding, modality, or distinguishing feature`,
+  "Surgical Atlas or Procedural Guide": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Surgical Atlas or Procedural Guide
 ──────────────────────────────────────────────
@@ -197,8 +125,8 @@ IF SOURCE IS: Surgical Atlas or Procedural Guide
 3. "Why is approach X preferred over approach Y for condition Z?"
 4. "What structure is at risk during step X and why?"
 5. "Trace the steps of procedure X in order with the key decision at each step"
-Cloze: hide the step number, structure name, or instrument used
-
+Cloze: hide the step number, structure name, or instrument used`,
+  "Clinical Case or PBL Case": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Clinical Case or PBL Case
 ──────────────────────────────────────────────
@@ -207,8 +135,8 @@ IF SOURCE IS: Clinical Case or PBL Case
 3. "What is the next best step in management and why?"
 4. "What does the investigation result tell you and what does it change?"
 5. "What complication is this patient at risk for and what is the mechanism?"
-Cloze: hide the diagnosis, investigation, or management step
-
+Cloze: hide the diagnosis, investigation, or management step`,
+  "Board Review Material": `
 ──────────────────────────────────────────────
 IF SOURCE IS: Board Review Material
 ──────────────────────────────────────────────
@@ -216,172 +144,125 @@ IF SOURCE IS: Board Review Material
 2. "Why is X the answer rather than Y?" — force distinction-based reasoning
 3. Convert buzzwords into mechanism questions
 4. Flag every classic association and ask why it exists mechanistically
-Cloze: hide the high-yield fact, buzzword, or associated finding
-
+Cloze: hide the high-yield fact, buzzword, or associated finding`,
+  "General Medical": `
 ──────────────────────────────────────────────
-UNIVERSAL RULES FOR ALL SOURCE TYPES
+IF SOURCE IS: General Medical
 ──────────────────────────────────────────────
+1. Focus on mechanism and clinical consequence.
+2. "Why does X happen?"
+3. "What is the next best step?"
+Cloze: hide the key clinical finding or mechanism.`
+};
 
-BASIC CARDS
-Front: forces thinking, reasoning, and connection — never pure recall
-Back: complete answer with mechanism + reason + clinical consequence
-Use your own medical knowledge to add essential context not explicitly stated in the source, so every card back is fully self-contained and answerable without the original material.
-JSON type: "basic"
+async function generateWithClient(
+  ai: GoogleGenAI,
+  text: string,
+  images: Record<string, Buffer>,
+  deckName: string,
+  cardTypes: string[]
+) {
+  const modelPreDetect = 'gemini-3.1-flash-lite-preview';
+  const modelPass1 = 'gemini-3-flash-preview';    // Flash — bulk generation, cost efficient
+  const modelPass2 = 'gemini-3.1-pro-preview';    // Pro — gap audit, nuanced reasoning
 
-CLOZE CARDS
-Use standard Anki cloze syntax: {{c1::hidden text}}
-Only use c1. Never c2, c3, or higher.
-Hide only the single most high-yield word or phrase. If the term is ambiguous, add a hint: {{c1::answer::hint}}
-Back: explain WHY that answer is correct.
-A learner should never need to refer back to the source to understand a card's answer.
-JSON type: "cloze"
+  // Build the strict card type restriction block dynamically
+  const allowedTypesText = cardTypes.join(', ');
+  const noBasicRule = !cardTypes.includes('basic') ? '- Do NOT generate any "basic" type cards. Zero. None.' : '';
+  const noClozeRule = !cardTypes.includes('cloze') ? '- Do NOT generate any "cloze" type cards. Zero. None.' : '';
 
-NEVER write for any source type:
-- "What is X?" / "Name the..." / "Define X"
-- One-sentence backs
-- Cards answerable without reading the source
+  const cardTypeRestriction = `ALLOWED CARD TYPES: ${allowedTypesText}. STRICTLY FORBIDDEN to generate any other type.\n${noBasicRule}\n${noClozeRule}`;
 
-════════════════════════════════════════════════════════════
-STEP 3 — CARD QUALITY RULES
-════════════════════════════════════════════════════════════
+  console.log('Gemini Pre-detect: analyzing source...');
+  let detectedSourceType = "General Medical";
+  let detectedAudience = "General";
 
-Each card must cover the FULL picture of one concept:
-→ What it is
-→ Why it happens (mechanism)
-→ What it causes or means clinically
-→ How to distinguish it from something similar
-
-Never split one concept across multiple thin cards.
-A student who reads only the BACK of every card should deeply understand the entire topic.
-
-════════════════════════════════════════════════════════════
-STEP 4 — WHAT EXAMINERS ACTUALLY TEST
-════════════════════════════════════════════════════════════
-
-For every topic, generate cards across all four cognitive levels — weight heavily toward application and higher-order:
-- Recall: a specific fact, value, or name from the source
-- Concept: why something works the way it does — the mechanism
-- Application: a clinical vignette applying the concept to a patient scenario
-- Higher-order: comparing two similar things, explaining an exception, or analyzing an implication
-
-Tailor cards to emphasize the most challenging areas — concepts that are commonly confused or require deeper understanding get more cards.
-
-Additionally weight toward:
-- Loss of function → what breaks → what symptom results
-- Two similar things → the single key distinguishing feature
-- Classic presentation → underlying mechanism
-- Drug or intervention → mechanism → what fails if it goes wrong
-- Number or threshold → what it means clinically
-- Common misconception → the correct understanding
-- Exception to the rule → why the exception exists
-- Landmark trial → what it changed and why
-
-════════════════════════════════════════════════════════════
-STEP 5 — FORMATTING RULES
-════════════════════════════════════════════════════════════
-
-- Card fronts must be under 40 words — if a front exceeds 40 words, rewrite it more concisely
-- Bold all key terms, structures, drugs, organisms using <b>tags</b>
-- Use <br> for line breaks — never raw newlines
-- Spell out every abbreviation on first use
-- No emoji, no bullet points inside cards
-- Never start a front with "What is", "Define", or "Name"
-- Numbers must always include their unit and clinical context
-- When a well-known mnemonic exists for the concept, include it at the end of the back in italics using <i> tags
-
-════════════════════════════════════════════════════════════
-STEP 6 — STRICTLY FORBIDDEN
-════════════════════════════════════════════════════════════
-
-- Cards for content not in the source
-- Definition-only cards with no mechanism or clinical angle
-- One-word or one-sentence backs
-- Padding cards
-- Splitting one concept into multiple thin cards
-- Generating any card type not listed in the STRICT CARD TYPE RESTRICTION
-
-════════════════════════════════════════════════════════════
-STEP 7 — COMPREHENSIVENESS AUDIT
-════════════════════════════════════════════════════════════
-
-Before returning JSON, scroll back to the BEGINNING of the source and verify the first 25% of the material has adequate card coverage — early content is most commonly missed.
-
-COVERAGE AUDIT:
-□ Every core concept → at least one mechanism-based card
-□ Every named structure, drug, enzyme, organism, receptor → in at least one card
-□ Every cause → its own mechanism card
-□ Every consequence or complication → what happens, why, how to recognize it
-□ Every treatment → mechanism, indication, what fails if it goes wrong
-□ Every comparison the source makes → a distinction card
-□ Every number, threshold, or value → a cloze card with clinical context (only if cloze is allowed)
-□ Every named sign, syndrome, eponym, or trial → in at least one card
-□ Every classic or atypical presentation → a clinical reasoning card
-□ Every heading or slide title in the source → at least one card
-
-EXAM TRAP AUDIT:
-□ What do learners commonly confuse about this?
-□ What would an examiner reverse to trick a student?
-□ Is there a "sounds similar but opposite" concept?
-□ Is there an exception to the rule that gets tested?
-Generate at least one card per trap identified.
-
-DEPTH AUDIT — for every card:
-□ Does the back explain WHY, not just WHAT?
-□ Is there a mechanism?
-□ Is there a clinical consequence?
-□ Would a learner answering a vignette about this pass based only on this card?
-If any card fails — rewrite it before returning.
-
-NOTHING IN THE SOURCE SHOULD BE LEFT UNCOVERED.
-
-════════════════════════════════════════════════════════════
-OUTPUT FORMAT
-════════════════════════════════════════════════════════════
-
-Return a JSON array only. No preamble, no explanation, no markdown fences.
+  try {
+    const preDetectPrompt = `
+Analyze the following medical text and determine its primary source type and target audience level.
+Return a JSON object with two keys:
+1. "sourceType": Must be exactly one of: "Anatomy", "Physiology", "Biochemistry or Nutrition", "Pharmacology or Drug Formulary", "Pathology", "Microbiology or Immunology", "Clinical Guideline", "Journal Article or Research Paper", "Biostatistics or Epidemiology", "Radiology or Imaging", "Surgical Atlas or Procedural Guide", "Clinical Case or PBL Case", "Board Review Material", or "General Medical".
+2. "audienceLevel": Must be exactly one of: "Medical student (Year 1-2)", "Medical student (Year 3-4)", "Resident", "Fellow", or "General".
 `;
+    const preDetectSchema = {
+      type: Type.OBJECT,
+      properties: {
+        sourceType: { type: Type.STRING },
+        audienceLevel: { type: Type.STRING }
+      },
+      required: ['sourceType', 'audienceLevel']
+    };
 
-  const pass2Prompt = `
-You are a medical education specialist doing a coverage audit on an Anki flashcard deck.
+    const preDetectResponse = await ai.models.generateContent({
+      model: modelPreDetect,
+      contents: { role: 'user', parts: [{ text: text.substring(0, 15000) }] },
+      config: {
+        systemInstruction: preDetectPrompt,
+        responseMimeType: 'application/json',
+        responseSchema: preDetectSchema
+      }
+    });
+    
+    const preDetectText = preDetectResponse.text;
+    if (preDetectText) {
+      const parsed = JSON.parse(preDetectText.replace(/```json|```/g, '').trim());
+      if (parsed.sourceType) detectedSourceType = parsed.sourceType;
+      if (parsed.audienceLevel) detectedAudience = parsed.audienceLevel;
+    }
+    console.log(`Pre-detect complete: ${detectedSourceType} for ${detectedAudience}`);
+  } catch (error) {
+    console.warn("Pre-detect failed, defaulting to General Medical:", error);
+  }
 
-You will be given:
-1. The original source material
-2. The cards already generated in Pass 1
+  const specificInstructions = sourceTypeInstructions[detectedSourceType] || sourceTypeInstructions["General Medical"];
 
-Your job is to find ONLY the concepts, mechanisms, facts, values, and clinical points from the source that have NO card covering them yet — and generate cards for those gaps only.
+  const pass1Prompt = `Act as an expert medical educator creating high-yield Anki flashcards.
 
-STRICT CARD TYPE RESTRICTION:
-You are ONLY allowed to generate cards of these types: ${allowedTypesText}
-Do NOT generate any other card types.
+CONTEXT:
+Source Type: ${detectedSourceType}
+Audience: ${detectedAudience}
+Density: Scale card count to content (15-25 for short, 100-150 for dense). Never pad, never miss high-yield concepts.
+
+${cardTypeRestriction}
+${specificInstructions}
+
+CARD RULES:
+- BASIC CARDS: Front forces reasoning (never pure recall, "What is X?", or "Define X"). Back gives complete answer + mechanism + clinical consequence. Add essential context not in source so back is self-contained. JSON type: "basic".
+- CLOZE CARDS: Use {{c1::hidden text}} or {{c1::answer::hint}}. Hide only the highest-yield word/phrase. Back explains WHY it's correct. JSON type: "cloze".
+- Each card covers ONE full concept (what, why/mechanism, clinical meaning, distinctions). Never split concepts.
+- Weight toward application, higher-order thinking, mechanisms, distinctions, clinical consequences, exam traps, and exceptions.
+
+FORMATTING:
+- Fronts < 40 words.
+- Bold key terms with <b>tags</b>.
+- Use <br> for line breaks (no raw newlines).
+- Spell out abbreviations first use.
+- No emoji, no bullet points inside cards.
+- Numbers need units and clinical context.
+- Mnemonics in <i> tags at the end of the back.
+
+FORBIDDEN:
+- Content not in source.
+- Definition-only or one-sentence backs.
+- Padding or splitting concepts.
+
+AUDIT BEFORE OUTPUT:
+Ensure 100% coverage, especially the first 25% of the source. Include every core concept, named structure/drug/organism, cause, complication, treatment, comparison, threshold, eponym, and presentation. Cover common confusions and exceptions.
+
+OUTPUT: JSON array only. No preamble/markdown.`;
+
+  const pass2Prompt = `Act as a medical educator auditing an Anki deck.
+Find concepts, mechanisms, facts, values, and clinical points from the source with NO existing card. Generate cards ONLY for these gaps.
+
+ALLOWED CARD TYPES: ${allowedTypesText}.
 
 RULES:
-- Do NOT regenerate cards for concepts already covered
-- Do NOT duplicate any existing card even partially
-- Only generate cards for genuine gaps — concepts present in the source with zero coverage
-- Apply the exact same quality rules as Pass 1:
-  → Full mechanism in every back
-  → No one-sentence backs
-  → No definition-only cards
-  → No "What is X?" fronts
-  → Card fronts under 40 words
-  → Only c1 in cloze cards
-  → Bold key terms with <b>tags</b>
-  → Use <br> for line breaks
+- Do NOT duplicate or regenerate covered concepts.
+- Apply Pass 1 rules: Full mechanism in back, no 1-sentence backs, no definition-only, fronts < 40 words, only c1 in cloze, <b> for key terms, <br> for line breaks.
+- Look for missing: numbers/thresholds, named structures/drugs/organisms, complications, comparisons, exam traps, and early source content.
 
-WHAT TO LOOK FOR — common gaps:
-- Specific numbers, thresholds, or values with no cloze card
-- Named structures, drugs, enzymes, or organisms never made into a card
-- Complications or consequences that were skipped
-- Comparisons the source makes that have no distinction card
-- Exam traps or misconceptions embedded in the source
-- Content from the first 25% of the source that was under-covered
-
-If there are NO gaps — return an empty array: []
-If there ARE gaps — return only the new cards as a JSON array.
-
-OUTPUT FORMAT:
-Return a JSON array only. No preamble, no explanation, no markdown fences.
-`;
+If NO gaps, return [].
+OUTPUT: JSON array only. No preamble/markdown.`;
 
   const sourceText = `Deck name: ${deckName}\n\nSource material:\n\n${text}`;
 
@@ -434,15 +315,13 @@ Return a JSON array only. No preamble, no explanation, no markdown fences.
 
   try {
     const pass2TextContent = `
+SOURCE:
 ${sourceText}
 
-────────────────────────────────────────
-CARDS ALREADY GENERATED IN PASS 1:
+PASS 1 CARDS:
 ${JSON.stringify(pass1Cards, null, 2)}
-────────────────────────────────────────
 
-Now identify any concepts, facts, values, or clinical points from the source that have NO card yet, and generate cards for those gaps only.
-`;
+Identify any concepts, facts, values, or clinical points from the source that have NO card yet, and generate cards for those gaps only.`;
 
     const pass2Parts = [
       { text: pass2TextContent }
