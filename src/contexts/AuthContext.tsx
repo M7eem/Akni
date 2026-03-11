@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { 
+  User, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  signOut as firebaseSignOut, 
+  setPersistence, 
+  browserLocalPersistence,
+  onAuthStateChanged
+} from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
@@ -11,11 +19,11 @@ interface UsageData {
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: User | null | undefined;
   loading: boolean;
   usage: UsageData | null;
   setUsage: React.Dispatch<React.SetStateAction<UsageData | null>>;
-  signInWithGoogle: () => Promise<any>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
 }
@@ -23,14 +31,14 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [usage, setUsage] = useState<UsageData | null>(null);
   const navigate = useNavigate();
   const isSigningInRef = React.useRef(false);
 
   useEffect(() => {
-    // Handle redirect result first
+    // Handle redirect result
     getRedirectResult(auth)
       .then((result) => {
         if (result?.user) {
@@ -45,11 +53,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error setting persistence:", error);
     });
 
-    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
-      console.log("Auth state changed:", firebaseUser?.email);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      console.log("Auth state changed:", firebaseUser?.email || 'Logged out');
       setUser(firebaseUser);
-      setLoading(false);
-
+      
       if (firebaseUser) {
         // Run in background — create doc if missing, then fetch usage
         (async () => {
@@ -61,7 +68,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
             if (!userDoc.exists()) {
-              // First time this user has signed in — create their document
               await setDoc(userRef, {
                 email: firebaseUser.email,
                 displayName: firebaseUser.displayName || '',
@@ -71,12 +77,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 lastLogin: serverTimestamp(),
                 periodStart: serverTimestamp()
               });
-              console.log(`Created Firestore doc for new user: ${firebaseUser.uid}`);
               setUsage({ used: 0, limit: 10, resetsOn });
             } else {
-              // Existing user — update lastLogin and read usage
               await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
-
               const data = userDoc.data();
               const limit = data.isAdmin === true ? 9999 : 10;
               const used = data.decksUsedThisMonth || 0;
@@ -86,13 +89,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             console.error("Error in onAuthStateChanged Firestore sync:", error);
             const now = new Date();
             setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
+          } finally {
+            setLoading(false);
           }
         })();
       } else {
         setUsage(null);
+        setLoading(false);
       }
     });
-    return unsubscribe;
+
+    return () => unsubscribe();
   }, []);
 
   // signInWithGoogle no longer creates the doc — onAuthStateChanged handles all users
