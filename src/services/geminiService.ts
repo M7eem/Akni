@@ -228,7 +228,8 @@ ${specificInstructions}
 
 CARD RULES:
 - BASIC CARDS: Front forces reasoning (never pure recall, "What is X?", or "Define X"). Back gives complete answer + mechanism + clinical consequence. Add essential context not in source so back is self-contained. JSON type: "basic".
-- CLOZE CARDS: Use {{c1::hidden text}} or {{c1::answer::hint}}. Hide only the highest-yield word/phrase. Back explains WHY it's correct. JSON type: "cloze".
+- CLOZE CARDS: Use {{c1::hidden text}} or {{c1::answer::hint}}. Hide only the highest-yield word/phrase. Back explains WHY it's correct. The cloze stem must NOT contain the definition of the hidden word. If the stem explains what the answer is, rewrite it as a clinical scenario instead. BAD: '...results in {{c1::apraxia}}, defined as inability to perform learned motor sequences' GOOD: 'Patient mimes using scissors incorrectly despite normal strength. Area 6 damage → {{c1::apraxia}}'. JSON type: "cloze".
+- EXTRA FIELD: Include 1+ if they exist: Mnemonic (if well-known), ⭐ (if classic board vignette), or Contrast ("vs [similar concept] — [single key difference]"). If none, leave as "". No special styling (no bold/colors/font sizes), padding, or generic statements.
 - Each card covers ONE full concept (what, why/mechanism, clinical meaning, distinctions). Never split concepts.
 - Weight toward application, higher-order thinking, mechanisms, distinctions, clinical consequences, exam traps, and exceptions.
 
@@ -239,7 +240,6 @@ FORMATTING:
 - Spell out abbreviations first use.
 - No emoji, no bullet points inside cards.
 - Numbers need units and clinical context.
-- Mnemonics in <i> tags at the end of the back.
 
 FORBIDDEN:
 - Content not in source.
@@ -258,7 +258,7 @@ ALLOWED CARD TYPES: ${allowedTypesText}.
 
 RULES:
 - Do NOT duplicate or regenerate covered concepts.
-- Apply Pass 1 rules: Full mechanism in back, no 1-sentence backs, no definition-only, fronts < 40 words, only c1 in cloze, <b> for key terms, <br> for line breaks.
+- Apply Pass 1 rules: Full mechanism in back, no 1-sentence backs, no definition-only, fronts < 40 words, cloze stem must be clinical scenario (not definition), populate 'extra' field, <b> for key terms, <br> for line breaks.
 - Look for missing: numbers/thresholds, named structures/drugs/organisms, complications, comparisons, exam traps, and early source content.
 
 If NO gaps, return [].
@@ -277,9 +277,10 @@ OUTPUT: JSON array only. No preamble/markdown.`;
       properties: {
         type:  { type: Type.STRING },
         front: { type: Type.STRING },
-        back:  { type: Type.STRING }
+        back:  { type: Type.STRING },
+        extra: { type: Type.STRING }
       },
-      required: ['type', 'front', 'back']
+      required: ['type', 'front', 'back', 'extra']
     }
   };
 
