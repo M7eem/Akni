@@ -44,7 +44,7 @@ export default function PrivacyPage() {
               </div>
               <div className="prose prose-invert max-w-none text-[#8899aa] leading-relaxed">
                 <p>
-                  Welcome to Ankit, operated by <strong>Card It</strong> ("we," "us," or "our"). We are committed to protecting your personal information and your right to privacy. This Privacy Policy explains how we collect, use, and safeguard your data when you use our service.
+                  Welcome to Ankit ("we," "us," or "our"). We are committed to protecting your personal information and your right to privacy. This Privacy Policy explains how we collect, use, and safeguard your data when you use our service.
                 </p>
               </div>
             </section>
@@ -94,7 +94,7 @@ export default function PrivacyPage() {
 
             <section className="pt-8 border-t border-white/5">
               <p className="text-sm text-[#8899aa]">
-                If you have any questions about this Privacy Policy, please contact us at support@ankit.study. Ankit is a product of <strong>Card It</strong>.
+                If you have any questions about this Privacy Policy, please contact us at support@ankit.study.
               </p>
             </section>
           </div>
@@ -106,7 +106,7 @@ export default function PrivacyPage() {
           <a href="/terms" className="text-xs text-[#8899aa] hover:text-sky-400 transition-colors">Terms of Service</a>
           <a href="/privacy" className="text-xs text-sky-400 font-bold">Privacy Policy</a>
         </div>
-        <p className="text-xs text-[#8899aa]">© 2026 Card It. All rights reserved.</p>
+        <p className="text-xs text-[#8899aa]">© 2026 Ankit. All rights reserved.</p>
       </footer>
     </div>
   );

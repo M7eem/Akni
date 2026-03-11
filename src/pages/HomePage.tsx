@@ -869,7 +869,7 @@ export default function HomePage() {
             <a href="/privacy" className="hover:text-[#eef6ff] transition-colors">Privacy Policy</a>
             <a href="mailto:support@ankit.study" className="hover:text-[#eef6ff] transition-colors">Support</a>
           </div>
-          <p className="text-[10px] text-[#8899aa]/50 uppercase tracking-widest mt-4">© 2026 Card It. All rights reserved.</p>
+          <p className="text-[10px] text-[#8899aa]/50 uppercase tracking-widest mt-4">© 2026 Ankit. All rights reserved.</p>
         </div>
       </footer>
 

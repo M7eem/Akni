@@ -34,7 +34,7 @@ export default function TermsPage() {
           transition={{ duration: 0.5 }}
         >
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Terms of Service</h1>
-          <p className="text-[#8899aa] mb-12 font-medium">Ankit is operated by <strong>Card It</strong>. Last updated: March 11, 2026</p>
+          <p className="text-[#8899aa] mb-12 font-medium">Last updated: March 11, 2026</p>
 
           <div className="space-y-12">
             <section>
@@ -111,7 +111,7 @@ export default function TermsPage() {
 
             <section className="pt-8 border-t border-white/5">
               <p className="text-sm text-[#8899aa]">
-                By using Ankit, you agree to these terms. If you do not agree, please do not use the service. For any questions regarding these terms, please contact us at support@ankit.study. Ankit is a product of <strong>Card It</strong>.
+                By using Ankit, you agree to these terms. If you do not agree, please do not use the service. For any questions regarding these terms, please contact us at support@ankit.study.
               </p>
             </section>
           </div>
@@ -123,7 +123,7 @@ export default function TermsPage() {
           <a href="/terms" className="text-xs text-sky-400 font-bold">Terms of Service</a>
           <a href="/privacy" className="text-xs text-[#8899aa] hover:text-sky-400 transition-colors">Privacy Policy</a>
         </div>
-        <p className="text-xs text-[#8899aa]">© 2026 Card It. All rights reserved.</p>
+        <p className="text-xs text-[#8899aa]">© 2026 Ankit. All rights reserved.</p>
       </footer>
     </div>
   );
