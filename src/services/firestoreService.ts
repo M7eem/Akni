@@ -14,14 +14,18 @@ export interface DeckRecord {
 
 export const saveDeckHistory = async (uid: string, deckData: Omit<DeckRecord, 'createdAt' | 'id'>, fileBlob?: Blob) => {
   try {
-    const deckId = Date.now().toString();
+    const deckId = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     let downloadUrl = deckData.downloadUrl;
     let storagePath = '';
 
     if (fileBlob) {
       storagePath = `users/${uid}/decks/${deckId}_${deckData.fileName}`;
       const storageRef = ref(storage, storagePath);
-      await uploadBytes(storageRef, fileBlob);
+      const metadata = {
+        contentDisposition: `attachment; filename="${deckData.fileName}"`,
+        contentType: 'application/octet-stream'
+      };
+      await uploadBytes(storageRef, fileBlob, metadata);
       downloadUrl = await getDownloadURL(storageRef);
     }
 

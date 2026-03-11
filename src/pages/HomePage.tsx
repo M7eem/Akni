@@ -266,29 +266,13 @@ export default function HomePage() {
       setCardCount(count);
 
       const safeName = deckName.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'My Deck';
-      let name = `${safeName}.apkg`;
-      if (cd) {
-        const match = cd.match(/filename="?([^"]+)"?/);
-        if (match?.[1]) name = match[1];
-      }
+      // Prioritize the user-provided deck name for the filename
+      const name = `${safeName}.apkg`;
       setFileName(name);
       
       if (user) {
         // Optimistic update
         setUsage(prev => prev ? { ...prev, used: prev.used + 1 } : prev);
-        
-        // Save deck history
-        try {
-          await saveDeckHistory(user.uid, {
-            deckName: safeName,
-            cardCount: count,
-            fileName: name,
-            downloadUrl: url
-          }, blob);
-          console.log("Deck history saved successfully.");
-        } catch (err) {
-          console.error("Failed to save deck history:", err);
-        }
         
         // Delay background sync so Firestore has time to reflect the increment
         setTimeout(() => {
@@ -598,13 +582,19 @@ export default function HomePage() {
                   <p className="text-[#8899aa] mb-8 text-sm">Generated {fileName} · {cardCount} cards</p>
                   
                   <div className="flex flex-col gap-3 max-w-xs mx-auto mb-10">
-                    <a
-                      href={downloadUrl}
-                      download={fileName}
+                    <button
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = downloadUrl!;
+                        link.download = fileName;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
                       className="gen-btn"
                     >
                       <Download size={20} /> Download .apkg
-                    </a>
+                    </button>
                     <button
                       onClick={reset}
                       className="w-full py-3 rounded-xl font-medium text-[#8899aa] border border-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.03)] transition-all text-sm"

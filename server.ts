@@ -347,12 +347,14 @@ app.post('/api/generate', generateLimiter, optionalAuth, upload.none(), async (r
         const storage = getAdminStorage();
         const bucket = storage.bucket();
         const deckId = uuidv4();
-        const storagePath = `users/${req.user.uid}/decks/${deckId}.apkg`;
+        const safeDeckName = deck_name.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'My Deck';
+        const storagePath = `users/${req.user.uid}/decks/${deckId}_${safeDeckName}.apkg`;
         const file = bucket.file(storagePath);
         
         await file.save(fs.readFileSync(outputPath), {
           metadata: {
             contentType: 'application/octet-stream',
+            contentDisposition: `attachment; filename="${safeDeckName}.apkg"`,
           }
         });
         
@@ -363,10 +365,11 @@ app.post('/api/generate', generateLimiter, optionalAuth, upload.none(), async (r
         const downloadUrl = file.publicUrl();
 
         await saveDeckHistory(req.user.uid, {
-          deckName: deck_name.replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'My Deck',
+          deckName: safeDeckName,
           cardCount: totalCards,
-          fileName: outputFilename,
-          downloadUrl: downloadUrl
+          fileName: `${safeDeckName}.apkg`,
+          downloadUrl: downloadUrl,
+          storagePath: storagePath
         });
         console.log(`Uploaded deck to Storage and saved history for user ${req.user.uid}`);
       } catch (uploadError) {
