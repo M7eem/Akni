@@ -57,7 +57,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               const userDoc = await getDoc(userRef);
 
               const now = new Date();
-              const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+              const nextMonday = new Date(now);
+              nextMonday.setDate(now.getDate() + (1 + 7 - now.getDay()) % 7 || 7);
+              nextMonday.setHours(0, 0, 0, 0);
+              const resetsOn = nextMonday;
 
               if (!userDoc.exists()) {
                 await setDoc(userRef, {
@@ -69,18 +72,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                   lastLogin: serverTimestamp(),
                   periodStart: serverTimestamp()
                 });
-                setUsage({ used: 0, limit: 10, resetsOn });
+                setUsage({ used: 0, limit: 3, resetsOn });
               } else {
                 await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
                 const data = userDoc.data();
-                const limit = data.isAdmin === true ? 9999 : 10;
+                const limit = data.isAdmin === true ? 9999 : 3;
                 const used = data.decksUsedThisMonth || 0;
                 setUsage({ used, limit, resetsOn });
               }
             } catch (error) {
               console.error("Error in onAuthStateChanged Firestore sync:", error);
               const now = new Date();
-              setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
+              const nextMonday = new Date(now);
+              nextMonday.setDate(now.getDate() + (1 + 7 - now.getDay()) % 7 || 7);
+              nextMonday.setHours(0, 0, 0, 0);
+              setUsage({ used: 0, limit: 3, resetsOn: nextMonday });
             } finally {
               setLoading(false);
             }

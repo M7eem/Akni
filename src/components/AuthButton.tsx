@@ -47,7 +47,7 @@ export default function AuthButton() {
           {/* Usage Stats */}
           <div className="mb-4 pb-4 border-b border-[rgba(255,255,255,0.05)]">
             <div className="flex justify-between items-center text-xs text-[#8899aa] mb-2">
-              <span className="flex items-center gap-1.5 font-medium"><BarChart3 size={12} /> Monthly Usage</span>
+              <span className="flex items-center gap-1.5 font-medium"><BarChart3 size={12} /> Weekly Usage</span>
               {usage ? (
                 <span className={usage.used >= usage.limit ? 'text-red-400 font-bold' : 'text-[#eef6ff]'}>
                   {usage.used} / {usage.limit} decks

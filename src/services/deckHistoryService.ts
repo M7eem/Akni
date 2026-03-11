@@ -1,6 +1,25 @@
 import { doc, getDoc, getDocFromServer, setDoc, updateDoc, Timestamp, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
+const getNextMonday = () => {
+  const now = new Date();
+  const result = new Date(now);
+  result.setDate(now.getDate() + (1 + 7 - now.getDay()) % 7 || 7);
+  result.setHours(0, 0, 0, 0);
+  return result;
+};
+
+const isSameWeek = (d1: Date, d2: Date) => {
+  const getMonday = (d: Date) => {
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  };
+  return getMonday(new Date(d1)).getTime() === getMonday(new Date(d2)).getTime();
+};
+
 const getUserRef = (uid: string) => doc(db, 'users', uid);
 
 const ensureUserDoc = async (uid: string, email?: string) => {
@@ -53,15 +72,14 @@ export const checkUsage = async (uid: string, email?: string) => {
     }
   }
 
-  if (periodStart.getMonth() !== now.getMonth() || periodStart.getFullYear() !== now.getFullYear()) {
-    return true; // Will be reset on increment
+  if (isSameWeek(periodStart, now)) {
+    if ((data.decksUsedThisMonth || 0) >= 3) {
+      throw new Error('LIMIT_REACHED');
+    }
+    return true;
   }
 
-  if ((data.decksUsedThisMonth || 0) >= 10) {
-    throw new Error('LIMIT_REACHED');
-  }
-
-  return true;
+  return true; // Will be reset on increment
 };
 
 export const checkAndIncrementUsage = async (uid: string, email?: string) => {
@@ -103,8 +121,8 @@ export const checkAndIncrementUsage = async (uid: string, email?: string) => {
     }
   }
 
-  // Reset if new month
-  if (periodStart.getMonth() !== now.getMonth() || periodStart.getFullYear() !== now.getFullYear()) {
+  // Reset if new week
+  if (!isSameWeek(periodStart, now)) {
     await updateDoc(userRef, {
       decksUsedThisMonth: 1,
       periodStart: serverTimestamp()
@@ -112,7 +130,7 @@ export const checkAndIncrementUsage = async (uid: string, email?: string) => {
     return 1;
   }
 
-  if ((data.decksUsedThisMonth || 0) >= 10) {
+  if ((data.decksUsedThisMonth || 0) >= 3) {
     throw new Error('LIMIT_REACHED');
   }
 
@@ -130,10 +148,10 @@ export const getUsage = async (uid: string, forceRefresh = false) => {
     const userDoc = await (forceRefresh ? getDocFromServer(userRef) : getDoc(userRef));
     
     const now = new Date();
-    let resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    let resetsOn = getNextMonday();
 
     if (!userDoc.exists()) {
-      return { used: 0, limit: 10, resetsOn };
+      return { used: 0, limit: 3, resetsOn };
     }
 
     const data = userDoc.data();
@@ -151,15 +169,15 @@ export const getUsage = async (uid: string, forceRefresh = false) => {
       }
     }
 
-    if (periodStart.getMonth() !== now.getMonth() || periodStart.getFullYear() !== now.getFullYear()) {
-      return { used: 0, limit: 10, resetsOn };
+    if (!isSameWeek(periodStart, now)) {
+      return { used: 0, limit: 3, resetsOn };
     }
 
-    return { used: data.decksUsedThisMonth || 0, limit: 10, resetsOn };
+    return { used: data.decksUsedThisMonth || 0, limit: 3, resetsOn };
   } catch (error) {
     console.error("Error fetching usage:", error);
     const now = new Date();
-    const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    return { used: 0, limit: 10, resetsOn };
+    const resetsOn = getNextMonday();
+    return { used: 0, limit: 3, resetsOn };
   }
 };

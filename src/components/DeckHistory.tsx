@@ -4,6 +4,7 @@ import { getDeckHistory, deleteDeckHistory, DeckRecord } from '../services/fires
 import { ref, getBlob } from 'firebase/storage';
 import { storage } from '../lib/firebase';
 import { Layers, FileText, Loader2, Download, Search, Trash2, Calendar, ExternalLink, MoreVertical } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 export default function DeckHistory() {
   const { user } = useAuth();
@@ -11,6 +12,8 @@ export default function DeckHistory() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [deckToDelete, setDeckToDelete] = useState<{ id: string, storagePath?: string } | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -34,8 +37,16 @@ export default function DeckHistory() {
   };
 
   const handleDelete = async (deckId: string, storagePath?: string) => {
-    if (!user || !window.confirm('Are you sure you want to delete this deck from your history?')) return;
+    if (!user) return;
+    setDeckToDelete({ id: deckId, storagePath });
+    setShowConfirmDelete(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!user || !deckToDelete) return;
     
+    const { id: deckId, storagePath } = deckToDelete;
+    setShowConfirmDelete(false);
     setDeletingId(deckId);
     try {
       await deleteDeckHistory(user.uid, deckId, storagePath);
@@ -45,6 +56,7 @@ export default function DeckHistory() {
       alert("Failed to delete deck. Please try again.");
     } finally {
       setDeletingId(null);
+      setDeckToDelete(null);
     }
   };
 
@@ -119,6 +131,19 @@ export default function DeckHistory() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <ConfirmModal 
+        isOpen={showConfirmDelete}
+        title="Delete Deck?"
+        message="Are you sure you want to delete this deck? This action cannot be undone and the file will be removed from storage."
+        confirmText="Delete"
+        cancelText="Keep Deck"
+        isDanger={true}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowConfirmDelete(false);
+          setDeckToDelete(null);
+        }}
+      />
       {/* Header & Search */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: '280px' }}>
