@@ -1,5 +1,6 @@
 import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db, storage } from '../lib/firebase';
 
 export interface DeckRecord {
   id?: string;
@@ -7,15 +8,28 @@ export interface DeckRecord {
   cardCount: number;
   fileName: string;
   downloadUrl?: string;
+  storagePath?: string;
   createdAt: any;
 }
 
-export const saveDeckHistory = async (uid: string, deckData: Omit<DeckRecord, 'createdAt' | 'id'>) => {
+export const saveDeckHistory = async (uid: string, deckData: Omit<DeckRecord, 'createdAt' | 'id'>, fileBlob?: Blob) => {
   try {
     const deckId = Date.now().toString();
+    let downloadUrl = deckData.downloadUrl;
+    let storagePath = '';
+
+    if (fileBlob) {
+      storagePath = `users/${uid}/decks/${deckId}_${deckData.fileName}`;
+      const storageRef = ref(storage, storagePath);
+      await uploadBytes(storageRef, fileBlob);
+      downloadUrl = await getDownloadURL(storageRef);
+    }
+
     const deckRef = doc(db, 'users', uid, 'decks', deckId);
     await setDoc(deckRef, {
       ...deckData,
+      downloadUrl,
+      storagePath,
       createdAt: serverTimestamp()
     });
   } catch (error) {
@@ -38,8 +52,12 @@ export const getDeckHistory = async (uid: string): Promise<DeckRecord[]> => {
   }
 };
 
-export const deleteDeckHistory = async (uid: string, deckId: string) => {
+export const deleteDeckHistory = async (uid: string, deckId: string, storagePath?: string) => {
   try {
+    if (storagePath) {
+      const storageRef = ref(storage, storagePath);
+      await deleteObject(storageRef).catch(err => console.warn("Could not delete storage file:", err));
+    }
     const deckRef = doc(db, 'users', uid, 'decks', deckId);
     await deleteDoc(deckRef);
   } catch (error) {

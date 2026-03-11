@@ -83,7 +83,7 @@ export default function AuthButton() {
             </button>
 
             <button
-              onClick={() => navigate('/history')}
+              onClick={() => navigate('/account?tab=history')}
               className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-[#8899aa] hover:text-[#eef6ff] hover:bg-white/5 transition-colors"
             >
               <History size={16} />

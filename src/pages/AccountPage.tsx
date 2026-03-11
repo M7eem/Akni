@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { updateProfile, sendPasswordResetEmail, deleteUser } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
@@ -12,8 +12,10 @@ type Tab = 'profile' | 'history' | 'billing' | 'danger';
 export default function AccountPage() {
   const { user, usage } = useAuth();
   const navigate = useNavigate();
-
-  const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  const initialTab = (searchParams.get('tab') as Tab) || 'profile';
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [isSavingName, setIsSavingName] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
@@ -151,7 +153,10 @@ export default function AccountPage() {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id as Tab)}
+                  onClick={() => {
+                    setActiveTab(item.id as Tab);
+                    setSearchParams({ tab: item.id });
+                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

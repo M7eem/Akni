@@ -31,12 +31,12 @@ export default function DeckHistory() {
     }
   };
 
-  const handleDelete = async (deckId: string) => {
+  const handleDelete = async (deckId: string, storagePath?: string) => {
     if (!user || !window.confirm('Are you sure you want to delete this deck from your history?')) return;
     
     setDeletingId(deckId);
     try {
-      await deleteDeckHistory(user.uid, deckId);
+      await deleteDeckHistory(user.uid, deckId, storagePath);
       setDecks(prev => prev.filter(d => d.id !== deckId));
     } catch (error) {
       console.error("Failed to delete deck", error);
@@ -144,7 +144,18 @@ export default function DeckHistory() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#8899aa' }}>
                     <Calendar size={14} />
-                    <span>{deck.createdAt?.toDate ? deck.createdAt.toDate().toLocaleDateString() : 'Just now'}</span>
+                    <span>
+                      {deck.createdAt?.toDate 
+                        ? deck.createdAt.toDate().toLocaleString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            year: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true
+                          }) 
+                        : 'Just now'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -176,7 +187,7 @@ export default function DeckHistory() {
                 )}
                 
                 <button 
-                  onClick={() => deck.id && handleDelete(deck.id)}
+                  onClick={() => deck.id && handleDelete(deck.id, deck.storagePath)}
                   disabled={deletingId === deck.id}
                   style={{ 
                     padding: '8px', borderRadius: '8px', background: 'transparent', border: 'none',

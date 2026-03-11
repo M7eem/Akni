@@ -284,7 +284,7 @@ export default function HomePage() {
             cardCount: count,
             fileName: name,
             downloadUrl: url
-          });
+          }, blob);
           console.log("Deck history saved successfully.");
         } catch (err) {
           console.error("Failed to save deck history:", err);
