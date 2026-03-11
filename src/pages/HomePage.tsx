@@ -97,6 +97,10 @@ export default function HomePage() {
   const { user, getIdToken, usage, setUsage, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
 
+  const plan = usage?.limit === 9999 ? 'Max' : (usage?.limit === 30 ? 'Pro' : 'Free');
+  const fileLimit = plan === 'Max' ? 10 : (plan === 'Pro' ? 5 : 1);
+  const isFree = plan === 'Free';
+
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
@@ -111,7 +115,7 @@ export default function HomePage() {
     const newFiles = (Array.from(e.target.files) as File[])
       .filter((f: File) => f.name.endsWith('.pptx') || f.name.endsWith('.pdf'))
       .map((f: File) => ({ file: f, id: Math.random().toString(36).substring(7) }));
-    setFiles(prev => [...prev, ...newFiles].slice(0, 5));
+    setFiles(prev => [...prev, ...newFiles].slice(0, fileLimit));
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -119,7 +123,7 @@ export default function HomePage() {
     const newFiles = (Array.from(e.dataTransfer.files) as File[])
       .filter((f: File) => f.name.endsWith('.pptx') || f.name.endsWith('.pdf'))
       .map((f: File) => ({ file: f, id: Math.random().toString(36).substring(7) }));
-    setFiles(prev => [...prev, ...newFiles].slice(0, 5));
+    setFiles(prev => [...prev, ...newFiles].slice(0, fileLimit));
   };
 
   const removeFile = (id: string) => setFiles(prev => prev.filter(f => f.id !== id));
@@ -445,16 +449,23 @@ export default function HomePage() {
                   <span className="field-label">Card Types</span>
                   <div className="types">
                     {[
-                      { id: 'basic', label: 'Basic Q&A' },
-                      { id: 'cloze', label: 'Cloze' },
-                      { id: 'image_occlusion', label: 'Image Occlusion' },
-                    ].map(({ id, label }) => (
+                      { id: 'basic', label: 'Basic Q&A', locked: false },
+                      { id: 'cloze', label: 'Cloze', locked: isFree },
+                      { id: 'image_occlusion', label: 'Image Occlusion', locked: isFree },
+                    ].map(({ id, label, locked }) => (
                       <button
                         key={id}
-                        className={`type-btn ${cardTypes.includes(id) ? 'on' : ''}`}
-                        onClick={() => setCardTypes(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])}
+                        className={`type-btn ${cardTypes.includes(id) ? 'on' : ''} ${locked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        onClick={() => {
+                          if (locked) {
+                            navigate('/#pricing');
+                            return;
+                          }
+                          setCardTypes(prev => prev.includes(id) ? (prev.length > 1 ? prev.filter(t => t !== id) : prev) : [...prev, id]);
+                        }}
                       >
                         {label}
+                        {locked && <span className="ml-2 text-[10px] bg-white/10 px-1.5 py-0.5 rounded uppercase">Pro</span>}
                       </button>
                     ))}
                   </div>
@@ -670,7 +681,7 @@ export default function HomePage() {
           <div className="step">
             <span className="step-n">01</span>
             <div className="step-title">Upload your file</div>
-            <div className="step-desc">PDF or PPTX. Up to 5 files. Text and images extracted automatically.</div>
+            <div className="step-desc">PDF or PPTX. Upload multiple files at once. Text and images extracted automatically.</div>
           </div>
           <div className="step">
             <span className="step-n">02</span>
@@ -737,11 +748,11 @@ export default function HomePage() {
           <div className="section-h">Simple, transparent plans</div>
         </motion.div>
         
-        <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+        <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
           {/* Free Plan */}
           <motion.div 
-            initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
-            className="p-8 rounded-3xl bg-[var(--surface)] border border-[var(--border)] relative overflow-hidden group"
+            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            className="p-8 rounded-3xl bg-[var(--surface)] border border-[var(--border)] relative overflow-hidden group flex flex-col"
           >
             <div className="mb-6">
               <h3 className="text-xl font-bold mb-2">Free</h3>
@@ -750,15 +761,18 @@ export default function HomePage() {
                 <span className="text-[#8899aa] text-sm">/month</span>
               </div>
             </div>
-            <ul className="space-y-4 mb-8">
+            <ul className="space-y-4 mb-8 flex-grow">
               <li className="flex items-center gap-3 text-sm text-[#8899aa]">
                 <CheckCircle size={16} className="text-[var(--accent)]" /> 3 decks every week
               </li>
               <li className="flex items-center gap-3 text-sm text-[#8899aa]">
-                <CheckCircle size={16} className="text-[var(--accent)]" /> All card types included
+                <CheckCircle size={16} className="text-[var(--accent)]" /> Basic Q&A cards only
               </li>
               <li className="flex items-center gap-3 text-sm text-[#8899aa]">
-                <CheckCircle size={16} className="text-[var(--accent)]" /> Image occlusion support
+                <CheckCircle size={16} className="text-[var(--accent)]" /> Max 1 file per upload
+              </li>
+              <li className="flex items-center gap-3 text-sm text-[#8899aa] opacity-50">
+                <div className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">×</div> No deck history
               </li>
             </ul>
             <button className="w-full py-3 rounded-xl border border-[var(--border)] text-sm font-bold text-[#8899aa] cursor-default">
@@ -768,35 +782,69 @@ export default function HomePage() {
 
           {/* Pro Plan */}
           <motion.div 
-            initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}
-            className="p-8 rounded-3xl bg-[var(--surface2)] border border-[var(--accent)]/30 relative overflow-hidden group"
+            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+            className="p-8 rounded-3xl bg-[var(--surface2)] border border-[var(--accent)]/30 relative overflow-hidden group flex flex-col"
           >
             <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] text-[10px] font-bold uppercase tracking-wider">
-              Recommended
+              Popular
             </div>
             <div className="mb-6">
               <h3 className="text-xl font-bold mb-2">Pro</h3>
               <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-extrabold">$9</span>
+                <span className="text-4xl font-extrabold">$5</span>
                 <span className="text-[#8899aa] text-sm">/month</span>
               </div>
             </div>
-            <ul className="space-y-4 mb-8">
+            <ul className="space-y-4 mb-8 flex-grow">
               <li className="flex items-center gap-3 text-sm text-[#eef6ff]">
-                <CheckCircle size={16} className="text-[var(--accent)]" /> Unlimited deck generation
+                <CheckCircle size={16} className="text-[var(--accent)]" /> 30 decks every month
               </li>
               <li className="flex items-center gap-3 text-sm text-[#eef6ff]">
-                <CheckCircle size={16} className="text-[var(--accent)]" /> Priority AI processing
+                <CheckCircle size={16} className="text-[var(--accent)]" /> Basic + Cloze + Occlusion
               </li>
               <li className="flex items-center gap-3 text-sm text-[#eef6ff]">
-                <CheckCircle size={16} className="text-[var(--accent)]" /> Early access to new features
+                <CheckCircle size={16} className="text-[var(--accent)]" /> Up to 5 files per upload
               </li>
               <li className="flex items-center gap-3 text-sm text-[#eef6ff]">
-                <CheckCircle size={16} className="text-[var(--accent)]" /> Custom card templates
+                <CheckCircle size={16} className="text-[var(--accent)]" /> Deck history + re-download
               </li>
             </ul>
             <button className="w-full py-3 rounded-xl bg-[var(--accent)] text-[#07090f] text-sm font-extrabold hover:opacity-90 transition-all shadow-[0_8px_20px_rgba(56,189,248,0.2)]">
               Upgrade to Pro
+            </button>
+          </motion.div>
+
+          {/* Max Plan */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 }}
+            className="p-8 rounded-3xl bg-[var(--surface)] border border-white/10 relative overflow-hidden group flex flex-col"
+          >
+            <div className="mb-6">
+              <h3 className="text-xl font-bold mb-2">Max</h3>
+              <div className="flex items-baseline gap-1">
+                <span className="text-4xl font-extrabold">$13</span>
+                <span className="text-[#8899aa] text-sm">/month</span>
+              </div>
+            </div>
+            <ul className="space-y-4 mb-8 flex-grow">
+              <li className="flex items-center gap-3 text-sm text-[#eef6ff]">
+                <CheckCircle size={16} className="text-white" /> Everything in Pro
+              </li>
+              <li className="flex items-center gap-3 text-sm text-[#eef6ff]">
+                <CheckCircle size={16} className="text-white" /> Unlimited decks
+              </li>
+              <li className="flex items-center gap-3 text-sm text-[#eef6ff]">
+                <CheckCircle size={16} className="text-white" /> Up to 10 files per upload
+              </li>
+              <li className="flex items-center gap-3 text-sm text-[#eef6ff]">
+                <CheckCircle size={16} className="text-white" /> Priority processing
+              </li>
+              <li className="flex items-center gap-3 text-sm text-[#eef6ff]">
+                <CheckCircle size={16} className="text-white" /> Early access to features
+              </li>
+            </ul>
+            <button className="w-full py-3 rounded-xl bg-white text-[#07090f] text-sm font-extrabold hover:opacity-90 transition-all">
+              Go Max
             </button>
           </motion.div>
         </div>
@@ -818,8 +866,10 @@ export default function HomePage() {
           <p className="text-[#8899aa] text-sm">Made for students who take studying seriously.</p>
           <div className="flex items-center gap-6 text-xs font-medium text-[#8899aa]">
             <a href="/terms" className="hover:text-[#eef6ff] transition-colors">Terms of Service</a>
+            <a href="/privacy" className="hover:text-[#eef6ff] transition-colors">Privacy Policy</a>
             <a href="mailto:support@ankit.study" className="hover:text-[#eef6ff] transition-colors">Support</a>
           </div>
+          <p className="text-[10px] text-[#8899aa]/50 uppercase tracking-widest mt-4">© 2026 Card It. All rights reserved.</p>
         </div>
       </footer>
 

@@ -91,11 +91,13 @@ export default function AccountPage() {
     }
   };
 
-  const planName = usage?.limit === 9999 ? 'Unlimited' : (usage?.limit && usage.limit > 10 ? 'Pro' : 'Free');
+  const planName = usage?.limit === 9999 ? 'Max' : (usage?.limit === 30 ? 'Pro' : 'Free');
+
+  const isFree = planName === 'Free';
 
   const navItems = [
     { id: 'profile', label: 'Profile', icon: User },
-    { id: 'history', label: 'Deck History', icon: Clock },
+    { id: 'history', label: 'Deck History', icon: Clock, locked: isFree },
     { id: 'billing', label: 'Plan & Billing', icon: CreditCard },
     { id: 'danger', label: 'Danger Zone', icon: Trash2 },
   ];
@@ -155,6 +157,11 @@ export default function AccountPage() {
                 <button
                   key={item.id}
                   onClick={() => {
+                    if (item.locked) {
+                      setActiveTab('billing');
+                      setSearchParams({ tab: 'billing' });
+                      return;
+                    }
                     setActiveTab(item.id as Tab);
                     setSearchParams({ tab: item.id });
                   }}
@@ -173,12 +180,14 @@ export default function AccountPage() {
                     background: isActive ? 'rgba(125, 211, 252, 0.1)' : 'transparent',
                     color: isActive ? 'var(--accent)' : 'var(--muted2)',
                     width: '100%',
-                    fontFamily: 'inherit'
+                    fontFamily: 'inherit',
+                    opacity: item.locked ? 0.5 : 1
                   }}
                   className={!isActive ? "hover:bg-white/5 hover:text-[var(--text)]" : ""}
                 >
                   <item.icon size={18} />
-                  {item.label}
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {item.locked && <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: '4px', color: 'var(--muted2)' }}>PRO</span>}
                 </button>
               );
             })}
@@ -354,8 +363,8 @@ export default function AccountPage() {
                 <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '24px', color: 'var(--text)', margin: '0 0 24px 0', letterSpacing: '-0.5px' }}>Available Plans</h3>
                 <div style={{ display: 'grid', gap: '16px' }}>
                   {[
-                    { name: 'Pro', price: '$9/mo', desc: '50 decks per month' },
-                    { name: 'Unlimited', price: '$19/mo', desc: 'Unlimited deck generation' }
+                    { name: 'Pro', price: '$5/mo', desc: '30 decks per month' },
+                    { name: 'Max', price: '$13/mo', desc: 'Unlimited deck generation' }
                   ].map((plan) => (
                     <div key={plan.name} style={{ 
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', 

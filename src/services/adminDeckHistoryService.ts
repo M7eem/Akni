@@ -58,7 +58,9 @@ export const checkUsage = async (uid: string, email?: string) => {
     return true;
   }
 
-  if ((data.decksUsedThisMonth || 0) >= 10) {
+  const limit = data.isAdmin === true ? 9999 : (data.limit || 3);
+
+  if ((data.decksUsedThisMonth || 0) >= limit) {
     throw new Error('LIMIT_REACHED');
   }
 
@@ -120,7 +122,9 @@ export const checkAndIncrementUsage = async (uid: string, email?: string): Promi
     return 1;
   }
 
-  if ((data.decksUsedThisMonth || 0) >= 10) {
+  const limit = data.isAdmin === true ? 9999 : (data.limit || 3);
+
+  if ((data.decksUsedThisMonth || 0) >= limit) {
     throw new Error('LIMIT_REACHED');
   }
 

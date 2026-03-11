@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               } else {
                 await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
                 const data = userDoc.data();
-                const limit = data.isAdmin === true ? 9999 : 3;
+                const limit = data.isAdmin === true ? 9999 : (data.limit || 3);
                 const used = data.decksUsedThisMonth || 0;
                 setUsage({ used, limit, resetsOn });
               }

@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage';
 import AuthPage from './pages/AuthPage';
 import AccountPage from './pages/AccountPage';
 import TermsPage from './pages/TermsPage';
+import PrivacyPage from './pages/PrivacyPage';
 import ScrollToTop from './components/ScrollToTop';
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/history" element={<Navigate to="/account?tab=history" replace />} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="/terms" element={<TermsPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
       </Routes>
     </>
   );
