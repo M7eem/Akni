@@ -326,11 +326,11 @@ export default function HomePage() {
 
       <nav className={scrolled ? 'nav-scrolled' : ''}>
         <a href="/" className="logo" style={{ textDecoration: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '9px', fontSize: '18px', fontWeight: 800, letterSpacing: '-0.5px', color: '#eef6ff' }}>
-            <div style={{ position: 'relative', width: '26px', height: '20px', flexShrink: 0 }}>
-              <div style={{ position: 'absolute', width: '20px', height: '14px', background: 'rgba(125,211,252,0.2)', border: '1px solid rgba(125,211,252,0.4)', borderRadius: '4px', top: 0, left: '6px' }} />
-              <div style={{ position: 'absolute', width: '20px', height: '14px', background: '#131820', border: '1px solid rgba(125,211,252,0.6)', borderRadius: '4px', bottom: 0, left: 0 }}>
-                <div style={{ position: 'absolute', top: '4px', left: '4px', right: '4px', height: '2px', borderRadius: '1px', background: 'rgba(125,211,252,0.5)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.5px', color: '#eef6ff' }}>
+            <div style={{ position: 'relative', width: '30px', height: '24px', flexShrink: 0 }}>
+              <div style={{ position: 'absolute', width: '24px', height: '16px', background: 'rgba(125,211,252,0.2)', border: '1px solid rgba(125,211,252,0.4)', borderRadius: '5px', top: 0, left: '6px' }} />
+              <div style={{ position: 'absolute', width: '24px', height: '16px', background: '#131820', border: '1px solid rgba(125,211,252,0.6)', borderRadius: '5px', bottom: 0, left: 0 }}>
+                <div style={{ position: 'absolute', top: '5px', left: '5px', right: '5px', height: '2px', borderRadius: '1px', background: 'rgba(125,211,252,0.5)' }} />
               </div>
             </div>
             Ankit
@@ -803,18 +803,24 @@ export default function HomePage() {
       </section>
 
       <footer>
-        <a href="/" className="logo" style={{ fontSize: '15px', textDecoration: 'none' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontWeight: 800, letterSpacing: '-0.5px', color: '#eef6ff' }}>
-            <div style={{ position: 'relative', width: '22px', height: '16px', flexShrink: 0 }}>
-              <div style={{ position: 'absolute', width: '16px', height: '11px', background: 'rgba(125,211,252,0.2)', border: '1px solid rgba(125,211,252,0.4)', borderRadius: '3px', top: 0, left: '5px' }} />
-              <div style={{ position: 'absolute', width: '16px', height: '11px', background: '#131820', border: '1px solid rgba(125,211,252,0.6)', borderRadius: '3px', bottom: 0, left: 0 }}>
-                <div style={{ position: 'absolute', top: '3px', left: '3px', right: '3px', height: '2px', borderRadius: '1px', background: 'rgba(125,211,252,0.5)' }} />
+        <div className="flex flex-col items-center gap-6">
+          <a href="/" className="logo" style={{ fontSize: '15px', textDecoration: 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontWeight: 800, letterSpacing: '-0.5px', color: '#eef6ff' }}>
+              <div style={{ position: 'relative', width: '22px', height: '16px', flexShrink: 0 }}>
+                <div style={{ position: 'absolute', width: '16px', height: '11px', background: 'rgba(125,211,252,0.2)', border: '1px solid rgba(125,211,252,0.4)', borderRadius: '3px', top: 0, left: '5px' }} />
+                <div style={{ position: 'absolute', width: '16px', height: '11px', background: '#131820', border: '1px solid rgba(125,211,252,0.6)', borderRadius: '3px', bottom: 0, left: 0 }}>
+                  <div style={{ position: 'absolute', top: '3px', left: '3px', right: '3px', height: '2px', borderRadius: '1px', background: 'rgba(125,211,252,0.5)' }} />
+                </div>
               </div>
+              Ankit
             </div>
-            Ankit
+          </a>
+          <p className="text-[#8899aa] text-sm">Made for students who take studying seriously.</p>
+          <div className="flex items-center gap-6 text-xs font-medium text-[#8899aa]">
+            <a href="/terms" className="hover:text-[#eef6ff] transition-colors">Terms of Service</a>
+            <a href="mailto:support@ankit.study" className="hover:text-[#eef6ff] transition-colors">Support</a>
           </div>
-        </a>
-        <p>Made for students who take studying seriously.</p>
+        </div>
       </footer>
 
       <AnimatePresence>
