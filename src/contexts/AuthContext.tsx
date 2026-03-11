@@ -38,68 +38,76 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const isSigningInRef = React.useRef(false);
 
   useEffect(() => {
-    // Handle redirect result
-    getRedirectResult(auth)
-      .then((result) => {
+    const init = async () => {
+      try {
+        await setPersistence(auth, browserLocalPersistence);
+      } catch (error) {
+        console.error("Error setting persistence:", error);
+      }
+
+      // Handle redirect result FIRST and wait for it
+      try {
+        const result = await getRedirectResult(auth);
         if (result?.user) {
-          console.log("Redirect sign-in successful:", result.user.email);
+          console.log("Redirect result user:", result.user.email);
         }
-      })
-      .catch((error) => {
+      } catch (error: any) {
         console.error("Redirect result error:", error.code, error.message);
+      }
+
+      // Then set up auth state listener
+      const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+        console.log("Auth state changed:", firebaseUser?.email || 'Logged out');
+        setUser(firebaseUser);
+        
+        if (firebaseUser) {
+          // Run in background — create doc if missing, then fetch usage
+          (async () => {
+            try {
+              const userRef = doc(db, 'users', firebaseUser.uid);
+              const userDoc = await getDoc(userRef);
+
+              const now = new Date();
+              const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+              if (!userDoc.exists()) {
+                await setDoc(userRef, {
+                  email: firebaseUser.email,
+                  displayName: firebaseUser.displayName || '',
+                  isAdmin: false,
+                  decksUsedThisMonth: 0,
+                  createdAt: serverTimestamp(),
+                  lastLogin: serverTimestamp(),
+                  periodStart: serverTimestamp()
+                });
+                setUsage({ used: 0, limit: 10, resetsOn });
+              } else {
+                await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
+                const data = userDoc.data();
+                const limit = data.isAdmin === true ? 9999 : 10;
+                const used = data.decksUsedThisMonth || 0;
+                setUsage({ used, limit, resetsOn });
+              }
+            } catch (error) {
+              console.error("Error in onAuthStateChanged Firestore sync:", error);
+              const now = new Date();
+              setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
+            } finally {
+              setLoading(false);
+            }
+          })();
+        } else {
+          setUsage(null);
+          setLoading(false);
+        }
       });
 
-    setPersistence(auth, browserLocalPersistence).catch((error) => {
-      console.error("Error setting persistence:", error);
-    });
+      return unsubscribe;
+    };
 
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      console.log("Auth state changed:", firebaseUser?.email || 'Logged out');
-      setUser(firebaseUser);
-      
-      if (firebaseUser) {
-        // Run in background — create doc if missing, then fetch usage
-        (async () => {
-          try {
-            const userRef = doc(db, 'users', firebaseUser.uid);
-            const userDoc = await getDoc(userRef);
-
-            const now = new Date();
-            const resetsOn = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-            if (!userDoc.exists()) {
-              await setDoc(userRef, {
-                email: firebaseUser.email,
-                displayName: firebaseUser.displayName || '',
-                isAdmin: false,
-                decksUsedThisMonth: 0,
-                createdAt: serverTimestamp(),
-                lastLogin: serverTimestamp(),
-                periodStart: serverTimestamp()
-              });
-              setUsage({ used: 0, limit: 10, resetsOn });
-            } else {
-              await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
-              const data = userDoc.data();
-              const limit = data.isAdmin === true ? 9999 : 10;
-              const used = data.decksUsedThisMonth || 0;
-              setUsage({ used, limit, resetsOn });
-            }
-          } catch (error) {
-            console.error("Error in onAuthStateChanged Firestore sync:", error);
-            const now = new Date();
-            setUsage({ used: 0, limit: 10, resetsOn: new Date(now.getFullYear(), now.getMonth() + 1, 1) });
-          } finally {
-            setLoading(false);
-          }
-        })();
-      } else {
-        setUsage(null);
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
+    let unsubscribe: (() => void) | undefined;
+    init().then(unsub => { unsubscribe = unsub; });
+    return () => { if (unsubscribe) unsubscribe(); };
   }, []);
 
   // signInWithGoogle no longer creates the doc — onAuthStateChanged handles all users
