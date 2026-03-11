@@ -14,50 +14,6 @@ export async function generateFlashcards(
   return generateWithClient(ai, text, images, deckName, cardTypes);
 }
 
-// ─── Concurrency limiter (prevents 429 rate limit errors) ───
-function pLimit(concurrency: number) {
-  const queue: Array<() => void> = [];
-  let active = 0;
-
-  const next = () => {
-    if (queue.length === 0 || active >= concurrency) return;
-    active++;
-    const fn = queue.shift()!;
-    fn();
-  };
-
-  return function <T>(fn: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-      queue.push(() => {
-        fn()
-          .then(resolve)
-          .catch(reject)
-          .finally(() => {
-            active--;
-            next();
-          });
-      });
-      next();
-    });
-  };
-}
-
-// ─── Chunk text with overlap ───
-function chunkText(text: string, chunkSize = 5500, overlapRatio = 0.15): string[] {
-  const overlap = Math.floor(chunkSize * overlapRatio);
-  const chunks: string[] = [];
-  let start = 0;
-
-  while (start < text.length) {
-    const end = Math.min(start + chunkSize, text.length);
-    chunks.push(text.slice(start, end));
-    if (end === text.length) break;
-    start += chunkSize - overlap;
-  }
-
-  return chunks;
-}
-
 const sourceTypeInstructions: Record<string, string> = {
   "Anatomy": `
 ──────────────────────────────────────────────
@@ -206,19 +162,18 @@ async function generateWithClient(
   deckName: string,
   cardTypes: string[]
 ) {
-  const modelPreDetect = 'gemini-3-flash-preview';  // Flash: pre-detect
-  const modelExtract   = 'gemini-3-flash-preview';  // Flash: chunk extraction
-  const modelMerge     = 'gemini-3-flash-preview';  // Flash: merge & deduplicate
-  const modelGenerate  = 'gemini-3.1-pro-preview';  // Pro: card generation
-  const modelAudit     = 'gemini-3.1-pro-preview';  // Pro: gap audit
+  const modelPreDetect = 'gemini-3.1-flash-lite-preview';
+  const modelPass1 = 'gemini-3-flash-preview';    // Flash — bulk generation, cost efficient
+  const modelPass2 = 'gemini-3.1-pro-preview';    // Pro — gap audit, nuanced reasoning
 
+  // Build the strict card type restriction block dynamically
   const allowedTypesText = cardTypes.join(', ');
   const noBasicRule = !cardTypes.includes('basic') ? '- Do NOT generate any "basic" type cards. Zero. None.' : '';
   const noClozeRule = !cardTypes.includes('cloze') ? '- Do NOT generate any "cloze" type cards. Zero. None.' : '';
+
   const cardTypeRestriction = `ALLOWED CARD TYPES: ${allowedTypesText}. STRICTLY FORBIDDEN to generate any other type.\n${noBasicRule}\n${noClozeRule}`;
 
-  // ─── PRE-DETECT ───
-  console.log('Pre-detect: analyzing source type and audience...');
+  console.log('Gemini Pre-detect: analyzing source...');
   let detectedSourceType = "General Medical";
   let detectedAudience = "General";
 
@@ -247,7 +202,7 @@ Return a JSON object with two keys:
         responseSchema: preDetectSchema
       }
     });
-
+    
     const preDetectText = preDetectResponse.text;
     if (preDetectText) {
       const parsed = JSON.parse(preDetectText.replace(/```json|```/g, '').trim());
@@ -261,87 +216,59 @@ Return a JSON object with two keys:
 
   const specificInstructions = sourceTypeInstructions[detectedSourceType] || sourceTypeInstructions["General Medical"];
 
-  // ─── STEP 1: CHUNK & EXTRACT (parallel, rate-limited) ───
-  console.log('Step 1: Chunking and extracting facts in parallel...');
+  const pass1Prompt = `Act as an expert medical educator creating high-yield Anki flashcards.
 
-  const chunks = chunkText(text, 5500, 0.15);
-  console.log(`Split into ${chunks.length} chunk(s)`);
+CONTEXT:
+Source Type: ${detectedSourceType}
+Audience: ${detectedAudience}
+Density: Scale card count to content (15-25 for short, 100-150 for dense). Never pad, never miss high-yield concepts.
 
-  const limit = pLimit(5);
+${cardTypeRestriction}
+${specificInstructions}
 
-  const extractionPrompt = `You are a medical knowledge extractor. Read this chunk of medical source material and extract every high-yield fact, mechanism, clinical point, threshold value, named entity (drug/organism/structure), complication, treatment, comparison, and exception.
+CARD RULES:
+- BASIC CARDS: Front forces reasoning (never pure recall, "What is X?", or "Define X"). Back gives complete answer + mechanism + clinical consequence. Add essential context not in source so back is self-contained. JSON type: "basic".
+- CLOZE CARDS: Use {{c1::hidden text}} or {{c1::answer::hint}}. Hide only the highest-yield word/phrase. Back explains WHY it's correct. JSON type: "cloze".
+- Each card covers ONE full concept (what, why/mechanism, clinical meaning, distinctions). Never split concepts.
+- Weight toward application, higher-order thinking, mechanisms, distinctions, clinical consequences, exam traps, and exceptions.
 
-Output a dense bullet-point list. Each bullet must be self-contained and specific. Include:
-- Mechanisms (why something happens, step by step)
-- Numbers and thresholds with units and clinical context
-- Cause → effect relationships
-- Named structures, drugs, organisms, enzymes, receptors
-- Clinical consequences and complications
-- Comparisons and distinctions between similar concepts
-- Exceptions and exam traps
-- Eponyms and classic associations
+FORMATTING:
+- Fronts < 40 words.
+- Bold key terms with <b>tags</b>.
+- Use <br> for line breaks (no raw newlines).
+- Spell out abbreviations first use.
+- No emoji, no bullet points inside cards.
+- Numbers need units and clinical context.
+- Mnemonics in <i> tags at the end of the back.
 
-Rules:
-- One fact per bullet point
-- Be exhaustive — a missed fact here means a missing flashcard later
-- Do NOT write prose or full paragraphs
-- Do NOT generate flashcards or JSON
-- Do NOT summarize or compress — capture every detail`;
+FORBIDDEN:
+- Content not in source.
+- Definition-only or one-sentence backs.
+- Padding or splitting concepts.
 
-  const chunkExtractions = await Promise.all(
-    chunks.map((chunk, i) =>
-      limit(async () => {
-        console.log(`  Extracting chunk ${i + 1}/${chunks.length}...`);
-        try {
-          const response = await ai.models.generateContent({
-            model: modelExtract,
-            contents: { role: 'user', parts: [{ text: chunk }] },
-            config: { systemInstruction: extractionPrompt }
-          });
-          return response.text || '';
-        } catch (err) {
-          console.warn(`  Chunk ${i + 1} extraction failed:`, err);
-          return '';
-        }
-      })
-    )
-  );
+AUDIT BEFORE OUTPUT:
+Ensure 100% coverage, especially the first 25% of the source. Include every core concept, named structure/drug/organism, cause, complication, treatment, comparison, threshold, eponym, and presentation. Cover common confusions and exceptions.
 
-  const rawMasterOutline = chunkExtractions.filter(Boolean).join('\n\n');
-  const rawBulletCount = rawMasterOutline.split('\n').filter(l => l.trim().startsWith('-') || l.trim().startsWith('•')).length;
-  console.log(`Step 1 complete: ${rawBulletCount} raw bullet points extracted`);
+OUTPUT: JSON array only. No preamble/markdown.`;
 
-  // ─── STEP 2: MERGE & DEDUPLICATE ───
-  console.log('Step 2: Merging and deduplicating into Master Outline...');
+  const pass2Prompt = `Act as a medical educator auditing an Anki deck.
+Find concepts, mechanisms, facts, values, and clinical points from the source with NO existing card. Generate cards ONLY for these gaps.
 
-  const mergePrompt = `You are a medical knowledge organizer. You have a large collection of bullet points extracted from overlapping chunks of a medical source. There are duplicates and fragmented facts about the same concept spread across bullets due to chunking overlap.
+ALLOWED CARD TYPES: ${allowedTypesText}.
 
-Your task:
-1. Remove exact and near-exact duplicate bullets.
-2. Merge related bullets about the same concept into one comprehensive bullet — e.g. if Drug X appears across 3 bullets covering mechanism, side effects, and contraindications, merge them into one rich bullet covering all three.
-3. Preserve every unique fact, number, threshold, named entity, and clinical point. Do NOT summarize, compress, or drop any detail.
-4. Group related concepts together for logical flow.
-5. Output the result as a clean, deduplicated, well-organized bullet-point Master Outline.
+RULES:
+- Do NOT duplicate or regenerate covered concepts.
+- Apply Pass 1 rules: Full mechanism in back, no 1-sentence backs, no definition-only, fronts < 40 words, only c1 in cloze, <b> for key terms, <br> for line breaks.
+- Look for missing: numbers/thresholds, named structures/drugs/organisms, complications, comparisons, exam traps, and early source content.
 
-Do NOT generate flashcards. Output only the organized bullet list.`;
+If NO gaps, return [].
+OUTPUT: JSON array only. No preamble/markdown.`;
 
-  let masterOutline = rawMasterOutline;
+  const sourceText = `Deck name: ${deckName}\n\nSource material:\n\n${text}`;
 
-  try {
-    const mergeResponse = await ai.models.generateContent({
-      model: modelMerge,
-      contents: { role: 'user', parts: [{ text: rawMasterOutline }] },
-      config: { systemInstruction: mergePrompt }
-    });
-    masterOutline = mergeResponse.text || rawMasterOutline;
-    const mergedLineCount = masterOutline.split('\n').filter(Boolean).length;
-    console.log(`Step 2 complete: Master Outline has ${mergedLineCount} lines`);
-  } catch (error) {
-    console.warn('Step 2 merge failed, using raw outline:', error);
-  }
-
-  // ─── STEP 3: CARD GENERATION ───
-  console.log('Step 3: Generating Anki flashcards from Master Outline...');
+  const pass1Parts = [
+    { text: sourceText }
+  ];
 
   const cardSchema = {
     type: Type.ARRAY,
@@ -350,147 +277,82 @@ Do NOT generate flashcards. Output only the organized bullet list.`;
       properties: {
         type:  { type: Type.STRING },
         front: { type: Type.STRING },
-        back:  { type: Type.STRING },
-        extra: { type: Type.STRING }
+        back:  { type: Type.STRING }
       },
-      required: ['type', 'front', 'back', 'extra']
+      required: ['type', 'front', 'back']
     }
   };
 
-  const generatePrompt = `Act as an expert medical educator creating high-yield Anki flashcards.
-
-CONTEXT:
-Source Type: ${detectedSourceType}
-Audience: ${detectedAudience}
-Deck: ${deckName}
-Density: Scale card count to content (15-25 for short outlines, 150-400 for dense ones). Never pad, never miss a bullet.
-
-${cardTypeRestriction}
-${specificInstructions}
-
-CARD RULES:
-- BASIC CARDS: Front forces reasoning (never pure recall, never "What is X?" or "Define X"). Back gives complete answer + mechanism + clinical consequence. Add essential context so the back is fully self-contained without the source. JSON type: "basic".
-- CLOZE CARDS: Use {{c1::hidden text}} or {{c1::answer::hint}}. Hide only the highest-yield word or phrase. Back explains WHY it is correct. The cloze stem must NOT define the hidden word — rewrite as a clinical scenario instead. BAD: '...results in {{c1::apraxia}}, defined as inability to perform learned motor sequences'. GOOD: 'Patient mimes using scissors incorrectly despite normal strength — Area 6 damage → {{c1::apraxia}}'. JSON type: "cloze".
-- EXTRA FIELD: Include any of: Mnemonic (if well-known), ⭐ (if classic board vignette), Contrast ("vs [similar concept] — [single key difference]"). If none apply, leave as "". No bold, colors, or font styling. No generic filler statements.
-- Each card covers ONE complete concept (what, why/mechanism, clinical meaning, distinctions). Never split a concept across cards.
-- Weight toward: mechanisms, clinical application, higher-order reasoning, distinctions, consequences, exam traps, exceptions.
-
-FORMATTING:
-- Fronts < 40 words.
-- Bold key terms with <b>tags</b>.
-- Use <br> for line breaks (never raw newlines inside fields).
-- Spell out abbreviations on first use.
-- No emoji, no bullet points inside card fields.
-- All numbers must include units and clinical context.
-
-FORBIDDEN:
-- Inventing content not present in the Master Outline.
-- Definition-only or one-sentence backs.
-- Padding or splitting concepts across cards.
-
-COVERAGE REQUIREMENT:
-Every bullet in the Master Outline must produce at least one card. Go through the outline top to bottom and ensure complete coverage before outputting.
-
-OUTPUT: JSON array only. No preamble, no markdown, no explanation.`;
-
-  // Split generation into batches if outline is large (dense 100-page sources)
-  const OUTLINE_SPLIT_THRESHOLD = 8000; // characters
-  let allGeneratedCards: any[] = [];
-
-  const outlineParts = masterOutline.length > OUTLINE_SPLIT_THRESHOLD
-    ? [
-        masterOutline.slice(0, Math.floor(masterOutline.length / 2)),
-        masterOutline.slice(Math.floor(masterOutline.length / 2))
-      ]
-    : [masterOutline];
-
-  if (outlineParts.length > 1) {
-    console.log(`  Outline is large (${masterOutline.length} chars) — splitting generation into ${outlineParts.length} batches`);
-  }
-
-  for (let i = 0; i < outlineParts.length; i++) {
-    const part = outlineParts[i];
-    console.log(`  Generating cards from outline part ${i + 1}/${outlineParts.length}...`);
-
-    try {
-      const generateResponse = await ai.models.generateContent({
-        model: modelGenerate,
-        contents: {
-          role: 'user',
-          parts: [{ text: `Master Outline (Deck: ${deckName}, Part ${i + 1}/${outlineParts.length}):\n\n${part}` }]
-        },
-        config: {
-          systemInstruction: generatePrompt,
-          responseMimeType: 'application/json',
-          responseSchema: cardSchema
-        }
-      });
-
-      const genText = generateResponse.text;
-      if (!genText) throw new Error(`Empty response on generation part ${i + 1}`);
-      const clean = genText.replace(/```json|```/g, '').trim();
-      const partCards = JSON.parse(clean);
-      allGeneratedCards = [...allGeneratedCards, ...partCards];
-      console.log(`  Part ${i + 1} complete: ${partCards.length} cards`);
-    } catch (error) {
-      console.error(`  Generation part ${i + 1} failed:`, error);
-      if (i === 0) throw error; // fatal only if first part fails
-    }
-  }
-
-  console.log(`Step 3 complete: ${allGeneratedCards.length} cards generated`);
-
-  // ─── STEP 4: GAP AUDIT ───
-  console.log('Step 4: Auditing for missed concepts...');
-
-  const auditPrompt = `Act as a medical educator auditing an Anki deck for coverage gaps.
-
-You will receive:
-1. A Master Outline of concentrated medical facts (the source of truth)
-2. A deck of already generated Anki cards
-
-Your task: Identify every concept, fact, mechanism, threshold, named entity, complication, comparison, or clinical point in the Master Outline that has NO adequate card in the existing deck. Generate cards ONLY for these gaps.
-
-${cardTypeRestriction}
-
-RULES:
-- Do NOT duplicate or regenerate concepts already covered.
-- Apply all card rules: full mechanism in back, no one-sentence backs, no definition-only cards, fronts < 40 words, cloze stems must be clinical scenarios not definitions, populate extra field where applicable, <b> for key terms, <br> for line breaks.
-- Look especially for: numbers and thresholds, named structures/drugs/organisms, complications, comparisons, exam traps, and any bullets that produced zero cards.
-
-If there are NO gaps, return [].
-OUTPUT: JSON array only. No preamble, no markdown.`;
-
-  let auditCards: any[] = [];
+  // ─── PASS 1 ───
+  console.log(`Gemini Pass 1: generating cards...`);
+  let pass1Cards: any[] = [];
 
   try {
-    const auditInput = `MASTER OUTLINE:\n${masterOutline}\n\nEXISTING CARDS:\n${JSON.stringify(allGeneratedCards, null, 2)}`;
-
-    const auditResponse = await ai.models.generateContent({
-      model: modelAudit,
-      contents: { role: 'user', parts: [{ text: auditInput }] },
+    const pass1Response = await ai.models.generateContent({
+      model: modelPass1,
+      contents: { role: 'user', parts: pass1Parts },
       config: {
-        systemInstruction: auditPrompt,
+        systemInstruction: pass1Prompt,
         responseMimeType: 'application/json',
         responseSchema: cardSchema
       }
     });
 
-    const auditText = auditResponse.text;
-    if (!auditText) throw new Error("Empty response on gap audit");
-    const cleanAudit = auditText.replace(/```json|```/g, '').trim();
-    auditCards = JSON.parse(cleanAudit);
-    console.log(`Step 4 complete: ${auditCards.length} gap cards added`);
+    const pass1Text = pass1Response.text;
+    if (!pass1Text) throw new Error("Empty response from Gemini on Pass 1");
+    const clean1 = pass1Text.replace(/```json|```/g, '').trim();
+    pass1Cards = JSON.parse(clean1);
+    console.log(`Pass 1 complete: ${pass1Cards.length} cards generated`);
+
   } catch (error) {
-    console.warn('Step 4 gap audit failed (non-fatal), returning generation cards only:', error);
+    console.error("Pass 1 error:", error);
+    throw error;
   }
 
-  const allCards = [...allGeneratedCards, ...auditCards];
-  console.log(`Pipeline complete: ${allCards.length} total cards before type filter`);
+  // ─── PASS 2 ───
+  console.log('Gemini Pass 2: gap filling...');
+  let pass2Cards: any[] = [];
+
+  try {
+    const pass2TextContent = `
+SOURCE:
+${sourceText}
+
+PASS 1 CARDS:
+${JSON.stringify(pass1Cards, null, 2)}
+
+Identify any concepts, facts, values, or clinical points from the source that have NO card yet, and generate cards for those gaps only.`;
+
+    const pass2Parts = [
+      { text: pass2TextContent }
+    ];
+
+    const pass2Response = await ai.models.generateContent({
+      model: modelPass2,
+      contents: { role: 'user', parts: pass2Parts },
+      config: {
+        systemInstruction: pass2Prompt,
+        responseMimeType: 'application/json',
+        responseSchema: cardSchema
+      }
+    });
+
+    const pass2Text = pass2Response.text;
+    if (!pass2Text) throw new Error("Empty response from Gemini on Pass 2");
+    const clean2 = pass2Text.replace(/```json|```/g, '').trim();
+    pass2Cards = JSON.parse(clean2);
+    console.log(`Pass 2 complete: ${pass2Cards.length} gap cards generated`);
+
+  } catch (error) {
+    console.warn("Pass 2 failed (non-fatal), returning Pass 1 cards only:", error);
+    return filterByCardType(pass1Cards, cardTypes);
+  }
+
+  const allCards = [...pass1Cards, ...pass2Cards];
   return filterByCardType(allCards, cardTypes);
 }
 
-// ─── Post-processing filter — hard enforces allowed card types ───
+// ─── Post-processing filter — enforces card types regardless of model behavior ───
 function filterByCardType(cards: any[], cardTypes: string[]): any[] {
   const allowed = new Set(cardTypes.map(t => t.toLowerCase()));
   const filtered = cards.filter(card => {
