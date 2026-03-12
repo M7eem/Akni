@@ -14,11 +14,10 @@ export async function generateFlashcards(
   return generateWithClient(ai, text, images, deckName, cardTypes);
 }
 
+// ── Source-type instruction bank ──────────────────────────────────
 const sourceTypeInstructions: Record<string, string> = {
   "Anatomy": `
-──────────────────────────────────────────────
-IF SOURCE IS: Anatomy
-──────────────────────────────────────────────
+ANATOMY CARD STRATEGIES:
 1. "What is the function of X and what is lost when it is damaged?"
 2. "Why does damage to X at level Y produce symptom Z?"
 3. "How does structure X relate to structure Y anatomically and clinically?"
@@ -26,9 +25,7 @@ IF SOURCE IS: Anatomy
 5. "What passes through / supplies / drains X?"
 Cloze: hide the structure name, nerve, artery, or level`,
   "Physiology": `
-──────────────────────────────────────────────
-IF SOURCE IS: Physiology
-──────────────────────────────────────────────
+PHYSIOLOGY CARD STRATEGIES:
 1. "Why does X cause Y?" — mechanism and causation
 2. "What happens when X is overactive / underactive / absent?"
 3. "Trace the pathway of X step by step from trigger to outcome"
@@ -36,9 +33,7 @@ IF SOURCE IS: Physiology
 5. "A patient presents with X — what physiological mechanism explains this?"
 Cloze: hide the key mediator, receptor, or outcome value`,
   "Biochemistry or Nutrition": `
-──────────────────────────────────────────────
-IF SOURCE IS: Biochemistry or Nutrition
-──────────────────────────────────────────────
+BIOCHEMISTRY/NUTRITION CARD STRATEGIES:
 1. "What enzyme catalyzes X and what accumulates if it is deficient?"
 2. "Why does deficiency of X cause Y?"
 3. "Trace the pathway of X — what is produced at each step?"
@@ -46,9 +41,7 @@ IF SOURCE IS: Biochemistry or Nutrition
 5. "How does X differ from Y metabolically?"
 Cloze: hide the enzyme name, substrate, product, or cofactor`,
   "Pharmacology or Drug Formulary": `
-──────────────────────────────────────────────
-IF SOURCE IS: Pharmacology or Drug Formulary
-──────────────────────────────────────────────
+PHARMACOLOGY CARD STRATEGIES:
 1. "What is the mechanism of action of X and which step does it target?"
 2. "Why does drug X cause side effect Y?"
 3. "How does drug X differ from drug Y in mechanism and indication?"
@@ -57,9 +50,7 @@ IF SOURCE IS: Pharmacology or Drug Formulary
 6. "What is the antidote for X toxicity and why does it work?"
 Cloze: hide the drug name, mechanism target, or dose threshold`,
   "Pathology": `
-──────────────────────────────────────────────
-IF SOURCE IS: Pathology
-──────────────────────────────────────────────
+PATHOLOGY CARD STRATEGIES:
 1. "Why does condition X produce finding Y?"
 2. "A patient presents with X — trace the pathophysiology from cause to presentation"
 3. "How does type X differ from type Y in mechanism, presentation, and prognosis?"
@@ -67,9 +58,7 @@ IF SOURCE IS: Pathology
 5. "What complication arises from X and what is the mechanism?"
 Cloze: hide the pathological finding, marker, or distinguishing feature`,
   "Microbiology or Immunology": `
-──────────────────────────────────────────────
-IF SOURCE IS: Microbiology or Immunology
-──────────────────────────────────────────────
+MICROBIOLOGY/IMMUNOLOGY CARD STRATEGIES:
 1. "How does organism X evade the immune system?"
 2. "Why does infection with X produce symptom Y?"
 3. "What is the virulence factor of X and what does it do?"
@@ -77,9 +66,7 @@ IF SOURCE IS: Microbiology or Immunology
 5. "A patient with deficiency of X presents with recurrent Y — why?"
 Cloze: hide the organism, toxin, immune cell, or cytokine`,
   "Clinical Guideline": `
-──────────────────────────────────────────────
-IF SOURCE IS: Clinical Guideline
-──────────────────────────────────────────────
+CLINICAL GUIDELINE CARD STRATEGIES:
 1. "According to guidelines, what is the first-line treatment for X and why?"
 2. "At what threshold does guideline X recommend intervention Y?"
 3. "A patient with X, Y, and Z — what does the guideline recommend and why?"
@@ -87,9 +74,7 @@ IF SOURCE IS: Clinical Guideline
 5. "How did the recommendation for X change and what evidence drove the change?"
 Cloze: hide the threshold value, drug name, or class recommendation`,
   "Journal Article or Research Paper": `
-──────────────────────────────────────────────
-IF SOURCE IS: Journal Article or Research Paper
-──────────────────────────────────────────────
+JOURNAL ARTICLE CARD STRATEGIES:
 1. "What did the [TRIAL NAME] trial show and what was the clinical implication?"
 2. "What was the NNT / NNH / ARR in [TRIAL NAME] and what does it mean?"
 3. "Why was [TRIAL NAME] practice-changing?"
@@ -97,9 +82,7 @@ IF SOURCE IS: Journal Article or Research Paper
 5. "How did [TRIAL NAME] change the guideline recommendation for X?"
 Cloze: hide the trial name, key finding, NNT value, or p-value`,
   "Biostatistics or Epidemiology": `
-──────────────────────────────────────────────
-IF SOURCE IS: Biostatistics or Epidemiology
-──────────────────────────────────────────────
+BIOSTATISTICS/EPIDEMIOLOGY CARD STRATEGIES:
 1. "A study reports sensitivity of X% — what does this mean and when would you use this test?"
 2. "How does increasing sample size affect the p-value and confidence interval?"
 3. "What is the difference between type I and type II error in clinical terms?"
@@ -107,9 +90,7 @@ IF SOURCE IS: Biostatistics or Epidemiology
 5. "How does relative risk differ from absolute risk reduction — give a clinical example?"
 Cloze: hide the statistical term, formula component, or threshold value`,
   "Radiology or Imaging": `
-──────────────────────────────────────────────
-IF SOURCE IS: Radiology or Imaging
-──────────────────────────────────────────────
+RADIOLOGY/IMAGING CARD STRATEGIES:
 1. "What is the pathognomonic imaging finding in X and why does it appear?"
 2. "How does X appear on CT vs MRI vs X-ray and why does each modality show it differently?"
 3. "How do you distinguish X from Y on imaging — what is the single key differentiating feature?"
@@ -117,9 +98,7 @@ IF SOURCE IS: Radiology or Imaging
 5. "A scan shows finding X — what is the most likely diagnosis and what is the mechanism?"
 Cloze: hide the imaging finding, modality, or distinguishing feature`,
   "Surgical Atlas or Procedural Guide": `
-──────────────────────────────────────────────
-IF SOURCE IS: Surgical Atlas or Procedural Guide
-──────────────────────────────────────────────
+SURGICAL/PROCEDURAL CARD STRATEGIES:
 1. "What is step X of procedure Y and what is the anatomical landmark used?"
 2. "What complication arises from step X and how is it avoided?"
 3. "Why is approach X preferred over approach Y for condition Z?"
@@ -127,9 +106,7 @@ IF SOURCE IS: Surgical Atlas or Procedural Guide
 5. "Trace the steps of procedure X in order with the key decision at each step"
 Cloze: hide the step number, structure name, or instrument used`,
   "Clinical Case or PBL Case": `
-──────────────────────────────────────────────
-IF SOURCE IS: Clinical Case or PBL Case
-──────────────────────────────────────────────
+CLINICAL CASE CARD STRATEGIES:
 1. "This patient has X, Y, and Z — what is the most likely diagnosis and why?"
 2. "Why does this patient's presentation point toward X rather than Y?"
 3. "What is the next best step in management and why?"
@@ -137,24 +114,158 @@ IF SOURCE IS: Clinical Case or PBL Case
 5. "What complication is this patient at risk for and what is the mechanism?"
 Cloze: hide the diagnosis, investigation, or management step`,
   "Board Review Material": `
-──────────────────────────────────────────────
-IF SOURCE IS: Board Review Material
-──────────────────────────────────────────────
+BOARD REVIEW CARD STRATEGIES:
 1. Extract the teaching point behind each fact — never just memorize the fact
 2. "Why is X the answer rather than Y?" — force distinction-based reasoning
 3. Convert buzzwords into mechanism questions
 4. Flag every classic association and ask why it exists mechanistically
 Cloze: hide the high-yield fact, buzzword, or associated finding`,
   "General Medical": `
-──────────────────────────────────────────────
-IF SOURCE IS: General Medical
-──────────────────────────────────────────────
+GENERAL MEDICAL CARD STRATEGIES:
 1. Focus on mechanism and clinical consequence.
 2. "Why does X happen?"
 3. "What is the next best step?"
 Cloze: hide the key clinical finding or mechanism.`
 };
 
+// ── Chunking constants ────────────────────────────────────────────
+const CHUNK_CHAR_LIMIT = 30_000;   // ~7,500 tokens per chunk
+const CHUNK_OVERLAP    = 2_000;    // overlap between chunks
+const SINGLE_CALL_LIMIT = 50_000;  // below this, no chunking needed
+const CHUNK_BATCH_SIZE = 3;        // concurrent API calls per batch
+
+// ── Card JSON schema (reused everywhere) ──────────────────────────
+const cardSchema = {
+  type: Type.ARRAY,
+  items: {
+    type: Type.OBJECT,
+    properties: {
+      type:  { type: Type.STRING },
+      front: { type: Type.STRING },
+      back:  { type: Type.STRING }
+    },
+    required: ['type', 'front', 'back'] as const
+  }
+};
+
+// ── Smart text splitter ───────────────────────────────────────────
+function splitTextIntoChunks(text: string): string[] {
+  if (text.length <= SINGLE_CALL_LIMIT) return [text];
+
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < text.length) {
+    let end = Math.min(start + CHUNK_CHAR_LIMIT, text.length);
+
+    // If not the last chunk, try to break at a paragraph or section boundary
+    if (end < text.length) {
+      // Look for a paragraph break (\n\n) near the end
+      const searchStart = Math.max(end - 3000, start);
+      const searchRegion = text.substring(searchStart, end);
+
+      // Prefer section headers (===, ---, ##), then double newlines
+      const sectionBreak = searchRegion.lastIndexOf('\n===');
+      const hrBreak = searchRegion.lastIndexOf('\n---');
+      const headerBreak = searchRegion.lastIndexOf('\n##');
+      const paraBreak = searchRegion.lastIndexOf('\n\n');
+
+      const bestBreak = Math.max(sectionBreak, hrBreak, headerBreak, paraBreak);
+
+      if (bestBreak > 0) {
+        end = searchStart + bestBreak + 1; // +1 to include the newline
+      }
+    }
+
+    chunks.push(text.substring(start, end));
+
+    // Next chunk starts with overlap so context isn't lost at boundaries
+    if (end >= text.length) break;
+    const nextStart = end - CHUNK_OVERLAP;
+    start = nextStart > start ? nextStart : end;
+  }
+
+  console.log(`Text split into ${chunks.length} chunks (total ${text.length} chars)`);
+  return chunks;
+}
+
+// ── Build the system prompt ───────────────────────────────────────
+function buildSystemPrompt(cardTypes: string[], chunkContext?: { chunkIndex: number; totalChunks: number; coveredTopics: string[] }): string {
+  const allowedTypesText = cardTypes.join(', ');
+  const noBasicRule = !cardTypes.includes('basic') ? '- Do NOT generate any "basic" type cards. Zero. None.\n' : '';
+  const noClozeRule = !cardTypes.includes('cloze') ? '- Do NOT generate any "cloze" type cards. Zero. None.\n' : '';
+  const cardTypeRestriction = `ALLOWED CARD TYPES: ${allowedTypesText}. STRICTLY FORBIDDEN to generate any other type.\n${noBasicRule}${noClozeRule}`;
+
+  const chunkNote = chunkContext
+    ? `\nYou are processing chunk ${chunkContext.chunkIndex + 1} of ${chunkContext.totalChunks} of a large document.
+${chunkContext.coveredTopics.length > 0 ? `Topics already covered by previous chunks (DO NOT re-cover these):\n${chunkContext.coveredTopics.map(t => `- ${t}`).join('\n')}\n` : ''}`
+    : '';
+
+  // All source-type instructions are provided so the model can self-select
+  const allSourceStrategies = Object.entries(sourceTypeInstructions)
+    .map(([key, val]) => `### ${key}\n${val}`)
+    .join('\n\n');
+
+  return `You are an expert medical educator creating high-yield Anki flashcards.
+
+STEP 1 — DETECT SOURCE TYPE:
+Read the source material and identify which ONE of these categories best fits:
+Anatomy, Physiology, Biochemistry or Nutrition, Pharmacology or Drug Formulary, Pathology, Microbiology or Immunology, Clinical Guideline, Journal Article or Research Paper, Biostatistics or Epidemiology, Radiology or Imaging, Surgical Atlas or Procedural Guide, Clinical Case or PBL Case, Board Review Material, General Medical.
+
+Then apply the matching card strategies below.
+
+STEP 2 — APPLY SOURCE-SPECIFIC STRATEGIES:
+
+${allSourceStrategies}
+
+STEP 3 — GENERATE CARDS:
+
+${cardTypeRestriction}
+${chunkNote}
+
+CARD DENSITY: Scale to content density. ~3–5 cards per page of dense material. Never pad with trivial cards, never skip high-yield concepts.
+
+BASIC CARDS (type: "basic"):
+- Front MUST force reasoning, application, or comparison. NEVER "What is X?" or "Define X".
+- Front must be under 40 words.
+- Back MUST include ALL of: (a) direct answer, (b) underlying mechanism or reasoning, (c) clinical consequence or significance, (d) key distinction from similar concepts when relevant.
+- Back must be self-contained — a student should understand it without seeing the source.
+
+CLOZE CARDS (type: "cloze"):
+- Use {{c1::hidden text}} or {{c1::answer::hint}} syntax.
+- Hide ONLY the highest-yield word or phrase per deletion.
+- Use multiple cloze deletions (c1, c2) in one card when testing related facts from the same sentence.
+- Back explains WHY the hidden answer is correct.
+
+QUALITY RULES:
+- Each card = ONE atomic concept, but the back is comprehensive.
+- Cover: definitions with mechanisms, comparisons, numbers with units and context, pathways, clinical correlations, classic presentations, exam traps, exceptions, complications.
+- Bold key terms with <b>tags</b>.
+- Use <br> for line breaks (no raw newlines in card content).
+- Spell out abbreviations on first use.
+- No emoji, no bullet points inside cards.
+- Mnemonics in <i>tags</i> at the end of the back.
+
+FORBIDDEN:
+- Content invented beyond the source.
+- Definition-only or single-sentence backs.
+- "What is X?" / "Define X" fronts.
+- Padding or splitting one concept across multiple cards.
+
+STEP 4 — SELF-AUDIT (CRITICAL):
+Before finalizing output, re-read the entire source and verify:
+□ Every named structure, drug, organism, enzyme, pathway, receptor is covered
+□ Every numeric value, threshold, or dosage has a card
+□ Every comparison or differential is addressed
+□ Every clinical consequence and complication is included
+□ Every exception, contraindication, or exam trap is captured
+□ The first 25% of the source has equal coverage as the rest
+If any gap is found, add cards for it.
+
+OUTPUT: JSON array only. No markdown fences, no preamble, no commentary.`;
+}
+
+// ── Main generation logic ─────────────────────────────────────────
 async function generateWithClient(
   ai: GoogleGenAI,
   text: string,
@@ -162,197 +273,149 @@ async function generateWithClient(
   deckName: string,
   cardTypes: string[]
 ) {
-  const modelPreDetect = 'gemini-3.1-flash-lite-preview';
-  const modelPass1 = 'gemini-3-flash-preview';    // Flash — bulk generation, cost efficient
-  const modelPass2 = 'gemini-3.1-pro-preview';    // Pro — gap audit, nuanced reasoning
-
-  // Build the strict card type restriction block dynamically
-  const allowedTypesText = cardTypes.join(', ');
-  const noBasicRule = !cardTypes.includes('basic') ? '- Do NOT generate any "basic" type cards. Zero. None.' : '';
-  const noClozeRule = !cardTypes.includes('cloze') ? '- Do NOT generate any "cloze" type cards. Zero. None.' : '';
-
-  const cardTypeRestriction = `ALLOWED CARD TYPES: ${allowedTypesText}. STRICTLY FORBIDDEN to generate any other type.\n${noBasicRule}\n${noClozeRule}`;
-
-  console.log('Gemini Pre-detect: analyzing source...');
-  let detectedSourceType = "General Medical";
-  let detectedAudience = "General";
-
-  try {
-    const preDetectPrompt = `
-Analyze the following medical text and determine its primary source type and target audience level.
-Return a JSON object with two keys:
-1. "sourceType": Must be exactly one of: "Anatomy", "Physiology", "Biochemistry or Nutrition", "Pharmacology or Drug Formulary", "Pathology", "Microbiology or Immunology", "Clinical Guideline", "Journal Article or Research Paper", "Biostatistics or Epidemiology", "Radiology or Imaging", "Surgical Atlas or Procedural Guide", "Clinical Case or PBL Case", "Board Review Material", or "General Medical".
-2. "audienceLevel": Must be exactly one of: "Medical student (Year 1-2)", "Medical student (Year 3-4)", "Resident", "Fellow", or "General".
-`;
-    const preDetectSchema = {
-      type: Type.OBJECT,
-      properties: {
-        sourceType: { type: Type.STRING },
-        audienceLevel: { type: Type.STRING }
-      },
-      required: ['sourceType', 'audienceLevel']
-    };
-
-    const preDetectResponse = await ai.models.generateContent({
-      model: modelPreDetect,
-      contents: { role: 'user', parts: [{ text: text.substring(0, 15000) }] },
-      config: {
-        systemInstruction: preDetectPrompt,
-        responseMimeType: 'application/json',
-        responseSchema: preDetectSchema
-      }
-    });
-    
-    const preDetectText = preDetectResponse.text;
-    if (preDetectText) {
-      const parsed = JSON.parse(preDetectText.replace(/```json|```/g, '').trim());
-      if (parsed.sourceType) detectedSourceType = parsed.sourceType;
-      if (parsed.audienceLevel) detectedAudience = parsed.audienceLevel;
-    }
-    console.log(`Pre-detect complete: ${detectedSourceType} for ${detectedAudience}`);
-  } catch (error) {
-    console.warn("Pre-detect failed, defaulting to General Medical:", error);
-  }
-
-  const specificInstructions = sourceTypeInstructions[detectedSourceType] || sourceTypeInstructions["General Medical"];
-
-  const pass1Prompt = `Act as an expert medical educator creating high-yield Anki flashcards.
-
-CONTEXT:
-Source Type: ${detectedSourceType}
-Audience: ${detectedAudience}
-Density: Scale card count to content (15-25 for short, 100-150 for dense). Never pad, never miss high-yield concepts.
-
-${cardTypeRestriction}
-${specificInstructions}
-
-CARD RULES:
-- BASIC CARDS: Front forces reasoning (never pure recall, "What is X?", or "Define X"). Back gives complete answer + mechanism + clinical consequence. Add essential context not in source so back is self-contained. JSON type: "basic".
-- CLOZE CARDS: Use {{c1::hidden text}} or {{c1::answer::hint}}. Hide only the highest-yield word/phrase. Back explains WHY it's correct. JSON type: "cloze".
-- Each card covers ONE full concept (what, why/mechanism, clinical meaning, distinctions). Never split concepts.
-- Weight toward application, higher-order thinking, mechanisms, distinctions, clinical consequences, exam traps, and exceptions.
-
-FORMATTING:
-- Fronts < 40 words.
-- Bold key terms with <b>tags</b>.
-- Use <br> for line breaks (no raw newlines).
-- Spell out abbreviations first use.
-- No emoji, no bullet points inside cards.
-- Numbers need units and clinical context.
-- Mnemonics in <i> tags at the end of the back.
-
-FORBIDDEN:
-- Content not in source.
-- Definition-only or one-sentence backs.
-- Padding or splitting concepts.
-
-AUDIT BEFORE OUTPUT:
-Ensure 100% coverage, especially the first 25% of the source. Include every core concept, named structure/drug/organism, cause, complication, treatment, comparison, threshold, eponym, and presentation. Cover common confusions and exceptions.
-
-OUTPUT: JSON array only. No preamble/markdown.`;
-
-  const pass2Prompt = `Act as a medical educator auditing an Anki deck.
-Find concepts, mechanisms, facts, values, and clinical points from the source with NO existing card. Generate cards ONLY for these gaps.
-
-ALLOWED CARD TYPES: ${allowedTypesText}.
-
-RULES:
-- Do NOT duplicate or regenerate covered concepts.
-- Apply Pass 1 rules: Full mechanism in back, no 1-sentence backs, no definition-only, fronts < 40 words, only c1 in cloze, <b> for key terms, <br> for line breaks.
-- Look for missing: numbers/thresholds, named structures/drugs/organisms, complications, comparisons, exam traps, and early source content.
-
-If NO gaps, return [].
-OUTPUT: JSON array only. No preamble/markdown.`;
-
+  const model = 'gemini-2.0-flash';
   const sourceText = `Deck name: ${deckName}\n\nSource material:\n\n${text}`;
+  const chunks = splitTextIntoChunks(sourceText);
+  const isChunked = chunks.length > 1;
 
-  const pass1Parts = [
-    { text: sourceText }
-  ];
+  console.log(`Generation mode: ${isChunked ? `chunked (${chunks.length} chunks)` : 'single-call'}`);
 
-  const cardSchema = {
-    type: Type.ARRAY,
-    items: {
-      type: Type.OBJECT,
-      properties: {
-        type:  { type: Type.STRING },
-        front: { type: Type.STRING },
-        back:  { type: Type.STRING }
-      },
-      required: ['type', 'front', 'back']
+  let allCards: any[] = [];
+  const coveredTopics: string[] = [];
+
+  if (!isChunked) {
+    // ─── Single-call mode ───
+    console.log('Generating cards (single call)...');
+    const systemPrompt = buildSystemPrompt(cardTypes);
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: { role: 'user', parts: [{ text: chunks[0] }] },
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: 'application/json',
+        responseSchema: cardSchema
+      }
+    });
+
+    const responseText = response.text;
+    if (!responseText) throw new Error("Empty response from Gemini");
+    const clean = responseText.replace(/```json|```/g, '').trim();
+    allCards = JSON.parse(clean);
+    console.log(`Single-call complete: ${allCards.length} cards generated`);
+
+  } else {
+    // ─── Chunked mode ───
+    for (let batchStart = 0; batchStart < chunks.length; batchStart += CHUNK_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + CHUNK_BATCH_SIZE, chunks.length);
+      const batch = chunks.slice(batchStart, batchEnd);
+
+      console.log(`Processing chunk batch ${Math.floor(batchStart / CHUNK_BATCH_SIZE) + 1}/${Math.ceil(chunks.length / CHUNK_BATCH_SIZE)} (chunks ${batchStart + 1}–${batchEnd})...`);
+
+      const batchPromises = batch.map((chunk, i) => {
+        const chunkIndex = batchStart + i;
+        const systemPrompt = buildSystemPrompt(cardTypes, {
+          chunkIndex,
+          totalChunks: chunks.length,
+          coveredTopics: [...coveredTopics]
+        });
+
+        return ai.models.generateContent({
+          model,
+          contents: { role: 'user', parts: [{ text: chunk }] },
+          config: {
+            systemInstruction: systemPrompt,
+            responseMimeType: 'application/json',
+            responseSchema: cardSchema
+          }
+        }).then(response => {
+          const responseText = response.text;
+          if (!responseText) return [];
+          const clean = responseText.replace(/```json|```/g, '').trim();
+          const cards = JSON.parse(clean);
+          console.log(`  Chunk ${chunkIndex + 1}: ${cards.length} cards`);
+          return cards;
+        }).catch(err => {
+          console.error(`  Chunk ${chunkIndex + 1} failed:`, err);
+          return [];
+        });
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+
+      for (const cards of batchResults) {
+        allCards.push(...cards);
+        // Extract topic summaries (first 60 chars of front) for dedup context
+        for (const card of cards) {
+          if (card.front) {
+            coveredTopics.push(card.front.substring(0, 80).replace(/<[^>]+>/g, ''));
+          }
+        }
+      }
     }
-  };
 
-  // ─── PASS 1 ───
-  console.log(`Gemini Pass 1: generating cards...`);
-  let pass1Cards: any[] = [];
+    console.log(`All chunks processed: ${allCards.length} total cards before dedup`);
 
-  try {
-    const pass1Response = await ai.models.generateContent({
-      model: modelPass1,
-      contents: { role: 'user', parts: pass1Parts },
-      config: {
-        systemInstruction: pass1Prompt,
-        responseMimeType: 'application/json',
-        responseSchema: cardSchema
-      }
-    });
-
-    const pass1Text = pass1Response.text;
-    if (!pass1Text) throw new Error("Empty response from Gemini on Pass 1");
-    const clean1 = pass1Text.replace(/```json|```/g, '').trim();
-    pass1Cards = JSON.parse(clean1);
-    console.log(`Pass 1 complete: ${pass1Cards.length} cards generated`);
-
-  } catch (error) {
-    console.error("Pass 1 error:", error);
-    throw error;
+    // ─── Deduplication pass ───
+    allCards = await deduplicateCards(ai, allCards);
   }
 
-  // ─── PASS 2 ───
-  console.log('Gemini Pass 2: gap filling...');
-  let pass2Cards: any[] = [];
-
-  try {
-    const pass2TextContent = `
-SOURCE:
-${sourceText}
-
-PASS 1 CARDS:
-${JSON.stringify(pass1Cards, null, 2)}
-
-Identify any concepts, facts, values, or clinical points from the source that have NO card yet, and generate cards for those gaps only.`;
-
-    const pass2Parts = [
-      { text: pass2TextContent }
-    ];
-
-    const pass2Response = await ai.models.generateContent({
-      model: modelPass2,
-      contents: { role: 'user', parts: pass2Parts },
-      config: {
-        systemInstruction: pass2Prompt,
-        responseMimeType: 'application/json',
-        responseSchema: cardSchema
-      }
-    });
-
-    const pass2Text = pass2Response.text;
-    if (!pass2Text) throw new Error("Empty response from Gemini on Pass 2");
-    const clean2 = pass2Text.replace(/```json|```/g, '').trim();
-    pass2Cards = JSON.parse(clean2);
-    console.log(`Pass 2 complete: ${pass2Cards.length} gap cards generated`);
-
-  } catch (error) {
-    console.warn("Pass 2 failed (non-fatal), returning Pass 1 cards only:", error);
-    return filterByCardType(pass1Cards, cardTypes);
-  }
-
-  const allCards = [...pass1Cards, ...pass2Cards];
   return filterByCardType(allCards, cardTypes);
 }
 
-// ─── Post-processing filter — enforces card types regardless of model behavior ───
+// ── Lightweight deduplication ─────────────────────────────────────
+async function deduplicateCards(ai: GoogleGenAI, cards: any[]): Promise<any[]> {
+  if (cards.length <= 5) return cards;
+
+  console.log('Running deduplication pass...');
+
+  // Build a compact list of fronts for the model to judge
+  const frontList = cards.map((c, i) => `[${i}] ${c.front?.replace(/<[^>]+>/g, '').substring(0, 100)}`).join('\n');
+
+  const dedupPrompt = `You are deduplicating Anki flashcards. Below is a numbered list of card fronts.
+Identify cards that are near-duplicates (testing the same concept with very similar wording).
+For each group of duplicates, keep only the BEST one (most specific, best worded).
+
+Return a JSON array of the INDEX NUMBERS to REMOVE (the worse duplicates). If no duplicates, return [].
+
+Card fronts:
+${frontList}`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash-lite',
+      contents: { role: 'user', parts: [{ text: dedupPrompt }] },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.INTEGER }
+        }
+      }
+    });
+
+    const responseText = response.text;
+    if (!responseText) return cards;
+
+    const clean = responseText.replace(/```json|```/g, '').trim();
+    const indicesToRemove = new Set<number>(JSON.parse(clean));
+
+    if (indicesToRemove.size === 0) {
+      console.log('Dedup: no duplicates found');
+      return cards;
+    }
+
+    const deduped = cards.filter((_, i) => !indicesToRemove.has(i));
+    console.log(`Dedup: removed ${indicesToRemove.size} duplicates (${cards.length} → ${deduped.length})`);
+    return deduped;
+
+  } catch (err) {
+    console.warn('Dedup pass failed (non-fatal), returning all cards:', err);
+    return cards;
+  }
+}
+
+// ── Post-processing filter — enforces card types regardless of model behavior ──
 function filterByCardType(cards: any[], cardTypes: string[]): any[] {
   const allowed = new Set(cardTypes.map(t => t.toLowerCase()));
   const filtered = cards.filter(card => {

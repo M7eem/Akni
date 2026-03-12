@@ -461,7 +461,7 @@ export default function HomePage() {
                   </div>
                   <h3>Drag & drop any material here</h3>
                   <p>Lectures, books, or research papers (PDF, PPTX)</p>
-                  <p style={{ fontSize: '12px', color: '#8899aa', marginTop: '8px' }}>Max file size: 50MB. Supports up to 100 pages.</p>
+                  <p style={{ fontSize: '12px', color: '#8899aa', marginTop: '8px' }}>Max file size: 500MB. Supports large textbooks & documents.</p>
                 </div>
 
                 <div
@@ -940,7 +940,7 @@ export default function HomePage() {
               },
               {
                 q: "Is there a limit on file size?",
-                a: "Free users can upload files up to 10MB. Pro and Max users enjoy higher limits up to 50MB per file to accommodate large medical or law textbooks."
+                a: "You can upload files up to 500MB to accommodate large medical or law textbooks. Large documents are automatically chunked and processed in parallel."
               },
               {
                 q: "What is your refund policy?",
