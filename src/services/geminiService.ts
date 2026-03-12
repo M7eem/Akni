@@ -231,20 +231,32 @@ Before generating any cards, scan the ENTIRE source from beginning to end and li
 STEP 3b — GENERATE CARDS:
 
 BASIC CARDS (type: "basic"):
-- Front MUST force reasoning, application, or comparison. NEVER "What is X?" or "Define X".
+- Front MUST test active recall — the student must retrieve the answer from memory, not recognize it from clues in the question.
+- ANTI-LEAKAGE RULE: The front must NEVER contain the answer, a synonym of the answer, or enough context to guess without knowing the material. If someone who hasn't studied could guess correctly, the card is too easy.
+- Frame fronts as clinical scenarios, mechanism questions, or "why" questions. Examples:
+  - "A patient presents with [symptoms]. What is the underlying mechanism?" (not "What does X cause?")
+  - "Why does damage to [area] produce [symptom] but spare [other function]?" (not "What does [area] do?")
+  - "How would you distinguish [condition A] from [condition B] on exam?" (not "What is condition A?")
 - Front must be under 40 words.
 - Back MUST include ALL of: (a) direct answer, (b) underlying mechanism or reasoning, (c) clinical consequence or significance, (d) key distinction from similar concepts when relevant.
 - Back must be self-contained — a student should understand it without seeing the source.
 
 CLOZE CARDS (type: "cloze"):
 - Use {{c1::hidden text}} or {{c1::answer::hint}} syntax.
-- Hide ONLY the highest-yield word or phrase per deletion.
+- Hide ONLY the highest-yield word or phrase per deletion — the part the student MUST actively recall.
 - Use multiple cloze deletions (c1, c2) in one card when testing related facts from the same sentence.
 - Back explains WHY the hidden answer is correct.
+- The surrounding context must NOT make the cloze trivially obvious.
 
-QUALITY RULES:
+EXAM-READINESS RULES:
+- The goal is: a student who masters this deck can answer ANY exam question on this material.
+- For each major concept, create cards from multiple angles: mechanism, clinical presentation, diagnosis, differential, complication, exception.
+- Include "exam trap" cards — common mistakes or easily confused pairs that examiners love to test.
+- Include "clinical vignette" cards — present a scenario and ask for the most likely diagnosis, mechanism, or next step.
 - Each card = ONE atomic concept, but the back is comprehensive.
-- Cover: definitions with mechanisms, comparisons, numbers with units and context, pathways, clinical correlations, classic presentations, exam traps, exceptions, complications.
+- Cover: mechanisms, comparisons, numbers with units and context, pathways, clinical correlations, classic presentations, exam traps, exceptions, complications.
+
+FORMATTING RULES:
 - Bold key terms with <b>tags</b>.
 - Use <br> for line breaks (no raw newlines in card content).
 - Spell out abbreviations on first use.
@@ -254,7 +266,8 @@ QUALITY RULES:
 FORBIDDEN:
 - Content invented beyond the source.
 - Definition-only or single-sentence backs.
-- "What is X?" / "Define X" fronts.
+- "What is X?" / "Define X" / "List the features of X" fronts.
+- Fronts that contain or paraphrase the answer (answer leakage).
 - Padding or splitting one concept across multiple cards.
 - SKIPPING ANY SECTION OR TOPIC FROM THE SOURCE. Every paragraph must have at least one card.
 
