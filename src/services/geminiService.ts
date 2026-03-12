@@ -129,9 +129,9 @@ Cloze: hide the key clinical finding or mechanism.`
 };
 
 // ── Chunking constants ────────────────────────────────────────────
-const CHUNK_CHAR_LIMIT = 30_000;   // ~7,500 tokens per chunk
-const CHUNK_OVERLAP    = 2_000;    // overlap between chunks
-const SINGLE_CALL_LIMIT = 50_000;  // below this, no chunking needed
+const CHUNK_CHAR_LIMIT = 100_000;  // ~25,000 tokens per chunk (flash handles up to 1M context)
+const CHUNK_OVERLAP    = 3_000;    // overlap between chunks
+const SINGLE_CALL_LIMIT = 200_000; // below this, no chunking needed
 const CHUNK_BATCH_SIZE = 3;        // concurrent API calls per batch
 
 // ── Card JSON schema (reused everywhere) ──────────────────────────
@@ -273,7 +273,7 @@ async function generateWithClient(
   deckName: string,
   cardTypes: string[]
 ) {
-  const model = 'gemini-2.0-flash';
+  const model = 'gemini-3-flash-preview';
   const sourceText = `Deck name: ${deckName}\n\nSource material:\n\n${text}`;
   const chunks = splitTextIntoChunks(sourceText);
   const isChunked = chunks.length > 1;
@@ -383,7 +383,7 @@ ${frontList}`;
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-lite',
+      model: 'gemini-3.1-flash-lite-preview',
       contents: { role: 'user', parts: [{ text: dedupPrompt }] },
       config: {
         responseMimeType: 'application/json',
