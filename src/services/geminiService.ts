@@ -206,119 +206,82 @@ ${chunkContext.coveredTopics.length > 0 ? `Topics already covered by previous ch
     .map(([key, val]) => `### ${key}\n${val}`)
     .join('\n\n');
 
-  return `You are an expert medical educator creating high-yield Anki flashcards.
+  return `You are an expert medical educator creating high-yield Anki flashcards. Your #1 priority is COMPLETE COVERAGE — every concept in the source must have a card.
 
 STEP 1 — DETECT SOURCE TYPE:
-Read the source material and identify which ONE of these categories best fits:
-Anatomy, Physiology, Biochemistry or Nutrition, Pharmacology or Drug Formulary, Pathology, Microbiology or Immunology, Clinical Guideline, Journal Article or Research Paper, Biostatistics or Epidemiology, Radiology or Imaging, Surgical Atlas or Procedural Guide, Clinical Case or PBL Case, Board Review Material, General Medical.
+Read the source and identify: Anatomy, Physiology, Biochemistry, Pharmacology, Pathology, Microbiology, Clinical Guideline, Journal Article, Board Review, or General Medical. Apply matching strategies below.
 
-Then apply the matching card strategies below.
-
-STEP 2 — APPLY SOURCE-SPECIFIC STRATEGIES:
-
+STEP 2 — SOURCE-SPECIFIC STRATEGIES:
 ${allSourceStrategies}
 
-STEP 3 — MANDATORY TOPIC INVENTORY (DO THIS BEFORE ANY CARDS):
-Before generating a single card, scan the ENTIRE source from beginning to end — first paragraph to last — and build a mental inventory of every:
-- Named structure, area, gyrus, sulcus, nucleus, tract, lobe
-- Named Brodmann area or functional region
-- Named condition, syndrome, or clinical sign
-- Named pathway, circuit, or projection
-- Named comparison or differential pair (X vs Y)
-- Named drug, organism, enzyme, receptor
-- Every numeric value, percentage, or threshold
-- Every clinical example or analogy used by the source
-Every single item in this inventory MUST have at least one card. This is non-negotiable.
+STEP 3 — TOPIC INVENTORY (MANDATORY — DO THIS FIRST):
+Scan the ENTIRE source beginning to end. Mentally list every named concept: structures, areas, Brodmann areas, syndromes, pathways, comparisons, numbers, clinical examples. Every item MUST get a card. Missing even one is unacceptable.
 
 ${cardTypeRestriction}
 ${chunkNote}
 
 STEP 4 — GENERATE CARDS:
 
-CARD DENSITY — CONCEPT-BASED MINIMUM:
-Do NOT count pages. Instead: every named structure, every named syndrome, every named pathway, every named Brodmann area, and every comparison pair in the source MUST have a minimum of one card. For major concepts, generate cards from multiple angles (mechanism, clinical presentation, differential). UNDER-GENERATING IS THE WORST POSSIBLE OUTCOME — it is better to produce 20 extra cards than to miss 1 testable concept.
+MINIMUM DENSITY: Every named structure, syndrome, pathway, Brodmann area, and comparison in the source gets at least one card. Major concepts get multiple cards (mechanism + presentation + differential). If the source has 30 named concepts, you must produce at least 30 cards. Aim high — 40–80 cards for a typical dense lecture.
 
-BASIC CARDS (type: "basic"):
+═══ BASIC CARDS (type: "basic") ═══
 
-FRONT — CLINICAL SCENARIO FRAMING (CRITICAL):
-- The front must describe a SITUATION, OBSERVATION, or CLINICAL FINDING that the student must explain. Never directly ask what a structure does or where something is.
-- The student must reason from the scenario to the answer. If someone who hasn't studied could guess the answer from the question alone, the card is broken.
-- BANNED front patterns:
-  × "What does [structure] do?"
-  × "Where is [structure] located?"
-  × "What is [condition]?"
-  × "Define [term]"
-  × "List the features of [X]"
-  × "[Structure] is responsible for ___"
-- REQUIRED front patterns — always frame as one of these:
-  ✓ A patient scenario: "A patient can lift a hammer normally but cannot mime hammering a nail when asked. Muscle strength is 5/5. What is the condition, lesion site, and why does the motor program fail?"
-  ✓ A mechanism question: "Why does damage to [area] produce [symptom] but spare [other function]?"
-  ✓ A distinguishing question: "A patient ignores objects in their left visual field. How do you determine whether this is hemineglect or homonymous hemianopia?"
-  ✓ An explanation question: "Why does the sensory homunculus devote more cortical area to the hand and lips than to the entire trunk?"
-- Front must be under 40 words.
+FRONT RULES:
+- Describe a SITUATION the student must explain. Never ask "What is X?" or "Where is X?"
+- BANNED: "What does [X] do?" / "Define [X]" / "Where is [X]?" / "List features of [X]" / "[X] is responsible for ___"
+- REQUIRED: Use clinical scenarios, mechanism questions, "why" questions, or distinguishing questions.
+- Example: "A patient can lift a hammer but cannot mime hammering. Strength is 5/5. What is the condition and why does the motor program fail?"
+- The front must NEVER contain or hint at the answer. If an unstudied person could guess it, rewrite it.
+- Under 40 words.
 
-BACK — FLOWING PROSE EXPLANATION (CRITICAL):
-- The back must read as a SHORT COHERENT EXPLANATION, the way a lecturer would explain it at the bedside. It must CONNECT the anatomy to the symptom to the clinical implication in flowing prose — NOT bullet points, NOT a labeled list.
-- BAD back style (forbidden):
-  "Answer: Apraxia. Mechanism: Area 6 plans motor sequences. Consequence: Cannot perform learned tasks. Distinction: Strength is intact."
-- GOOD back style (required):
-  "This is <b>apraxia</b>. The muscles work fine — the patient can contract them — but the sequence of contraction is wrong. <b>Area 6</b> stores motor programs for purposeful learned tasks like whistling or using a screwdriver. It gives instructions to Area 4. When Area 6 is destroyed, the muscles have no program to follow. This is why strength is intact but the skilled movement is lost.<br><b>Key distinction from weakness:</b> in weakness, all movements fail equally; in apraxia, spontaneous or reflex movements of the same muscles remain possible."
-- Every back MUST include: (a) the direct answer, (b) the mechanism explained step-by-step, (c) the clinical significance, (d) how to distinguish from similar concepts — all woven into connected prose.
-- Back must be self-contained — a student should understand it without seeing the source.
+BACK FORMAT (TWO-PART STRUCTURE):
+- LINE 1: The direct short answer in bold — just enough to confirm if the student got it right. Example: "<b>Apraxia — lesion in Area 6 (premotor cortex)</b>"
+- Then <hr> separator.
+- BELOW THE LINE: A short prose explanation connecting anatomy → mechanism → clinical significance → distinction. Use the source's own examples and terminology. This part is for students who got it wrong and need to understand why.
+- Example back:
+  "<b>Apraxia — lesion in Area 6 (premotor cortex)</b><hr>The muscles work fine but the motor program is lost. Area 6 stores programs for skilled tasks like whistling and using a screwdriver. It sends instructions to Area 4 (primary motor cortex). When Area 6 is destroyed, Area 4 has no program to execute — strength remains intact but the purposeful movement is lost.<br><b>Key distinction:</b> in weakness, all movements fail equally; in apraxia, spontaneous movements of the same muscles remain possible."
 
-CLOZE CARDS (type: "cloze"):
+═══ CLOZE CARDS (type: "cloze") ═══
+
 - Use {{c1::hidden text}} or {{c1::answer::hint}} syntax.
-- CRITICAL: Hide the MECHANISM, CONSEQUENCE, or DISTINGUISHING FEATURE — the conceptual fact that requires understanding. Do NOT hide structural names, locations, or labels that the surrounding sentence gives away.
-- BAD cloze (forbidden): "The primary olfactory cortex is located in the {{c1::uncus}}" — the word 'uncus' is predictable from context.
-- GOOD cloze (required): "Unlike all other sensory pathways, olfaction reaches the cortex {{c1::without relaying in the thalamus::unique routing feature}}, projecting directly to the uncus (Area 34) and entorhinal cortex (Area 28)." — this tests actual conceptual knowledge.
-- Use multiple cloze deletions (c1, c2) in one card when testing related facts from the same sentence.
-- Back explains WHY the hidden answer is correct.
+- CRITICAL: Hide the MECHANISM, CONSEQUENCE, or UNIQUE FEATURE — never hide a name or label that the sentence context gives away.
+- TEST: Cover the hidden word. Can you guess it from the surrounding sentence alone? If yes → bad cloze, rewrite it.
+- BAD: "The primary olfactory cortex is in the {{c1::uncus}}" — obvious from context.
+- BAD: "The motor homunculus is characterized as being {{c1::precise, inverted, and disproportionate}}" — pattern-match from "characterized as being."
+- GOOD: "Unlike all other sensory pathways, olfaction reaches the cortex {{c1::without relaying in the thalamus::unique routing feature}}, projecting directly to the uncus."
+- GOOD: "In the motor homunculus, the hand and face occupy {{c1::disproportionately large areas::size vs body proportion}} because they require {{c2::finer motor control::why bigger}}."
+- Back: explain WHY the hidden answer is correct.
 
-SOURCE LANGUAGE PRESERVATION (CRITICAL):
-- Preserve the EXACT examples, analogies, and terminology used in the source material. If the source says "riding a bicycle and whistling," the card MUST say "riding a bicycle and whistling" — NOT "performing complex motor tasks."
-- The lecturer's specific examples are the memory anchors students already have from the lecture. Using different examples breaks the connection to their notes.
-- Use the source's own terminology. If the source says "motor program store," do not rephrase to "the sequence of contraction."
+═══ EXAM TRAP CARDS (MANDATORY) ═══
 
-EXAM TRAP CARDS (MANDATORY):
-- For every pair of concepts in the source that share a feature but differ in one critical way, generate one card that presents the shared feature and asks the student to identify the distinguishing factor.
-- A trap card is NOT the same as a comparison card. A comparison asks you to list differences. A TRAP card presents exactly the confusion point that makes students fail.
-- Examples of trap card fronts:
-  ✓ "A patient ignores objects in their left visual field. A second patient also cannot see objects in their left visual field. One has hemineglect, one has homonymous hemianopia. What single bedside test distinguishes them?"
-  ✓ "Both Wernicke's and Broca's aphasia involve language impairment. A patient speaks fluently but makes no sense. Which is it, and why do students confuse them?"
-  ✓ "An ACA stroke and an MCA stroke both cause contralateral weakness. How does the distribution of weakness tell you which artery is occluded?"
-- Generate at least one trap card for every confusable pair in the source.
+For every confusable pair in the source, generate a trap card. A trap card is NOT a comparison — it presents the exact confusion point.
+- Example: "Two patients both 'ignore' the left side. One has hemineglect, one has hemianopia. What single bedside test tells you which?"
+- Generate at least one trap card per confusable pair.
 
-FORMATTING RULES:
+═══ SOURCE LANGUAGE ═══
+
+Use the source's EXACT examples and terminology. "Riding a bicycle and whistling" stays "riding a bicycle and whistling" — never rephrase to "performing complex motor tasks."
+
+═══ FORMATTING ═══
+
 - Bold key terms with <b>tags</b>.
-- Use <br> for line breaks within cards (no raw newlines in card content).
-- Spell out abbreviations on first use.
-- No emoji, no bullet points inside cards — prose only.
-- Mnemonics in <i>tags</i> at the end of the back.
+- <br> for line breaks, <hr> to separate short answer from explanation.
+- No emoji, no bullet points in cards — prose only.
+- Mnemonics in <i>tags</i>.
 
-FORBIDDEN:
-- Content invented beyond the source.
-- Single-sentence or list-formatted backs.
-- Any front that asks "What is X?" / "Define X" / "Where is X located?" / "List the features of X".
-- Fronts that contain or paraphrase the answer.
-- Cloze deletions that hide a label predictable from surrounding context.
-- Rephrasing the source's own examples or terminology into generic language.
-- SKIPPING ANY SECTION, PARAGRAPH, OR CONCEPT FROM THE SOURCE.
+═══ FORBIDDEN ═══
 
-STEP 5 — COVERAGE AUDIT (ZERO TOLERANCE FOR GAPS):
-Go back through the source PARAGRAPH BY PARAGRAPH from first to last and verify:
-□ Does every paragraph have at least one card? If not — ADD cards NOW.
-□ Every named structure, area, gyrus, sulcus, nucleus, tract — has a card?
-□ Every named Brodmann area — covered?
-□ Every named condition, syndrome, or clinical sign — covered?
-□ Every named pathway or circuit — covered?
-□ Every numeric value, percentage, or threshold — covered?
-□ Every comparison or differential pair — has a card AND a trap card?
-□ Every clinical example and analogy from the source — preserved verbatim?
-□ The FIRST THIRD of the source — equally covered as the middle? (Models under-generate at the start)
-□ The LAST THIRD of the source — equally covered as the middle? (Models truncate at the end)
-If ANY gap is found, you MUST generate additional cards before finalizing.
+- Inventing content not in the source.
+- "What is X?" / "Define X" fronts.
+- Fronts that contain the answer.
+- Cloze that hides a name guessable from context.
+- Replacing the source's own terminology.
+- Skipping ANY concept from the source.
 
-OUTPUT: JSON array only. No markdown fences, no preamble, no commentary.`;
+STEP 5 — COVERAGE CHECK (DO THIS BEFORE FINALIZING):
+Go through the source paragraph by paragraph. For each paragraph ask: "Does this paragraph have at least one card?" If not, ADD cards now. Check the first third and last third have equal coverage to the middle.
+
+OUTPUT: JSON array only. No markdown, no preamble.`;
 }
 
 // ── Main generation logic ─────────────────────────────────────────
