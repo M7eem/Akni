@@ -218,71 +218,105 @@ STEP 2 — APPLY SOURCE-SPECIFIC STRATEGIES:
 
 ${allSourceStrategies}
 
-STEP 3 — GENERATE CARDS:
+STEP 3 — MANDATORY TOPIC INVENTORY (DO THIS BEFORE ANY CARDS):
+Before generating a single card, scan the ENTIRE source from beginning to end — first paragraph to last — and build a mental inventory of every:
+- Named structure, area, gyrus, sulcus, nucleus, tract, lobe
+- Named Brodmann area or functional region
+- Named condition, syndrome, or clinical sign
+- Named pathway, circuit, or projection
+- Named comparison or differential pair (X vs Y)
+- Named drug, organism, enzyme, receptor
+- Every numeric value, percentage, or threshold
+- Every clinical example or analogy used by the source
+Every single item in this inventory MUST have at least one card. This is non-negotiable.
 
 ${cardTypeRestriction}
 ${chunkNote}
 
-CARD DENSITY: Scale to content density. Target ~3–5 cards per page of dense material (e.g., a 20-page lecture = 60–100 cards). For lighter material, ~2–3 per page. UNDER-GENERATING IS THE WORST POSSIBLE OUTCOME. It is better to produce 20 extra cards than to miss 1 important topic.
+STEP 4 — GENERATE CARDS:
 
-STEP 3a — TOPIC EXTRACTION (DO THIS FIRST):
-Before generating any cards, scan the ENTIRE source from beginning to end and list every distinct topic, concept, structure, pathway, condition, drug, organism, and clinical point mentioned. Then generate cards for ALL of them. Do NOT skip any section of the source — the beginning, middle, and end must all have equal coverage.
-
-STEP 3b — GENERATE CARDS:
+CARD DENSITY — CONCEPT-BASED MINIMUM:
+Do NOT count pages. Instead: every named structure, every named syndrome, every named pathway, every named Brodmann area, and every comparison pair in the source MUST have a minimum of one card. For major concepts, generate cards from multiple angles (mechanism, clinical presentation, differential). UNDER-GENERATING IS THE WORST POSSIBLE OUTCOME — it is better to produce 20 extra cards than to miss 1 testable concept.
 
 BASIC CARDS (type: "basic"):
-- Front MUST test active recall — the student must retrieve the answer from memory, not recognize it from clues in the question.
-- ANTI-LEAKAGE RULE: The front must NEVER contain the answer, a synonym of the answer, or enough context to guess without knowing the material. If someone who hasn't studied could guess correctly, the card is too easy.
-- Frame fronts as clinical scenarios, mechanism questions, or "why" questions. Examples:
-  - "A patient presents with [symptoms]. What is the underlying mechanism?" (not "What does X cause?")
-  - "Why does damage to [area] produce [symptom] but spare [other function]?" (not "What does [area] do?")
-  - "How would you distinguish [condition A] from [condition B] on exam?" (not "What is condition A?")
+
+FRONT — CLINICAL SCENARIO FRAMING (CRITICAL):
+- The front must describe a SITUATION, OBSERVATION, or CLINICAL FINDING that the student must explain. Never directly ask what a structure does or where something is.
+- The student must reason from the scenario to the answer. If someone who hasn't studied could guess the answer from the question alone, the card is broken.
+- BANNED front patterns:
+  × "What does [structure] do?"
+  × "Where is [structure] located?"
+  × "What is [condition]?"
+  × "Define [term]"
+  × "List the features of [X]"
+  × "[Structure] is responsible for ___"
+- REQUIRED front patterns — always frame as one of these:
+  ✓ A patient scenario: "A patient can lift a hammer normally but cannot mime hammering a nail when asked. Muscle strength is 5/5. What is the condition, lesion site, and why does the motor program fail?"
+  ✓ A mechanism question: "Why does damage to [area] produce [symptom] but spare [other function]?"
+  ✓ A distinguishing question: "A patient ignores objects in their left visual field. How do you determine whether this is hemineglect or homonymous hemianopia?"
+  ✓ An explanation question: "Why does the sensory homunculus devote more cortical area to the hand and lips than to the entire trunk?"
 - Front must be under 40 words.
-- Back MUST include ALL of: (a) direct answer, (b) underlying mechanism or reasoning, (c) clinical consequence or significance, (d) key distinction from similar concepts when relevant.
+
+BACK — FLOWING PROSE EXPLANATION (CRITICAL):
+- The back must read as a SHORT COHERENT EXPLANATION, the way a lecturer would explain it at the bedside. It must CONNECT the anatomy to the symptom to the clinical implication in flowing prose — NOT bullet points, NOT a labeled list.
+- BAD back style (forbidden):
+  "Answer: Apraxia. Mechanism: Area 6 plans motor sequences. Consequence: Cannot perform learned tasks. Distinction: Strength is intact."
+- GOOD back style (required):
+  "This is <b>apraxia</b>. The muscles work fine — the patient can contract them — but the sequence of contraction is wrong. <b>Area 6</b> stores motor programs for purposeful learned tasks like whistling or using a screwdriver. It gives instructions to Area 4. When Area 6 is destroyed, the muscles have no program to follow. This is why strength is intact but the skilled movement is lost.<br><b>Key distinction from weakness:</b> in weakness, all movements fail equally; in apraxia, spontaneous or reflex movements of the same muscles remain possible."
+- Every back MUST include: (a) the direct answer, (b) the mechanism explained step-by-step, (c) the clinical significance, (d) how to distinguish from similar concepts — all woven into connected prose.
 - Back must be self-contained — a student should understand it without seeing the source.
 
 CLOZE CARDS (type: "cloze"):
 - Use {{c1::hidden text}} or {{c1::answer::hint}} syntax.
-- Hide ONLY the highest-yield word or phrase per deletion — the part the student MUST actively recall.
+- CRITICAL: Hide the MECHANISM, CONSEQUENCE, or DISTINGUISHING FEATURE — the conceptual fact that requires understanding. Do NOT hide structural names, locations, or labels that the surrounding sentence gives away.
+- BAD cloze (forbidden): "The primary olfactory cortex is located in the {{c1::uncus}}" — the word 'uncus' is predictable from context.
+- GOOD cloze (required): "Unlike all other sensory pathways, olfaction reaches the cortex {{c1::without relaying in the thalamus::unique routing feature}}, projecting directly to the uncus (Area 34) and entorhinal cortex (Area 28)." — this tests actual conceptual knowledge.
 - Use multiple cloze deletions (c1, c2) in one card when testing related facts from the same sentence.
 - Back explains WHY the hidden answer is correct.
-- The surrounding context must NOT make the cloze trivially obvious.
 
-EXAM-READINESS RULES:
-- The goal is: a student who masters this deck can answer ANY exam question on this material.
-- For each major concept, create cards from multiple angles: mechanism, clinical presentation, diagnosis, differential, complication, exception.
-- Include "exam trap" cards — common mistakes or easily confused pairs that examiners love to test.
-- Include "clinical vignette" cards — present a scenario and ask for the most likely diagnosis, mechanism, or next step.
-- Each card = ONE atomic concept, but the back is comprehensive.
-- Cover: mechanisms, comparisons, numbers with units and context, pathways, clinical correlations, classic presentations, exam traps, exceptions, complications.
+SOURCE LANGUAGE PRESERVATION (CRITICAL):
+- Preserve the EXACT examples, analogies, and terminology used in the source material. If the source says "riding a bicycle and whistling," the card MUST say "riding a bicycle and whistling" — NOT "performing complex motor tasks."
+- The lecturer's specific examples are the memory anchors students already have from the lecture. Using different examples breaks the connection to their notes.
+- Use the source's own terminology. If the source says "motor program store," do not rephrase to "the sequence of contraction."
+
+EXAM TRAP CARDS (MANDATORY):
+- For every pair of concepts in the source that share a feature but differ in one critical way, generate one card that presents the shared feature and asks the student to identify the distinguishing factor.
+- A trap card is NOT the same as a comparison card. A comparison asks you to list differences. A TRAP card presents exactly the confusion point that makes students fail.
+- Examples of trap card fronts:
+  ✓ "A patient ignores objects in their left visual field. A second patient also cannot see objects in their left visual field. One has hemineglect, one has homonymous hemianopia. What single bedside test distinguishes them?"
+  ✓ "Both Wernicke's and Broca's aphasia involve language impairment. A patient speaks fluently but makes no sense. Which is it, and why do students confuse them?"
+  ✓ "An ACA stroke and an MCA stroke both cause contralateral weakness. How does the distribution of weakness tell you which artery is occluded?"
+- Generate at least one trap card for every confusable pair in the source.
 
 FORMATTING RULES:
 - Bold key terms with <b>tags</b>.
-- Use <br> for line breaks (no raw newlines in card content).
+- Use <br> for line breaks within cards (no raw newlines in card content).
 - Spell out abbreviations on first use.
-- No emoji, no bullet points inside cards.
+- No emoji, no bullet points inside cards — prose only.
 - Mnemonics in <i>tags</i> at the end of the back.
 
 FORBIDDEN:
 - Content invented beyond the source.
-- Definition-only or single-sentence backs.
-- "What is X?" / "Define X" / "List the features of X" fronts.
-- Fronts that contain or paraphrase the answer (answer leakage).
-- Padding or splitting one concept across multiple cards.
-- SKIPPING ANY SECTION OR TOPIC FROM THE SOURCE. Every paragraph must have at least one card.
+- Single-sentence or list-formatted backs.
+- Any front that asks "What is X?" / "Define X" / "Where is X located?" / "List the features of X".
+- Fronts that contain or paraphrase the answer.
+- Cloze deletions that hide a label predictable from surrounding context.
+- Rephrasing the source's own examples or terminology into generic language.
+- SKIPPING ANY SECTION, PARAGRAPH, OR CONCEPT FROM THE SOURCE.
 
-STEP 4 — SELF-AUDIT (CRITICAL — ZERO TOLERANCE FOR GAPS):
-Before finalizing output, go back through the source PARAGRAPH BY PARAGRAPH and check:
-□ Does every paragraph/section have at least one card? If not, ADD cards now.
-□ Every named structure, area, gyrus, sulcus, nucleus, tract — does it have a card?
-□ Every named drug, organism, enzyme, pathway, receptor — covered?
-□ Every numeric value (percentages, thresholds, dosages, statistics) — covered?
-□ Every comparison or differential (X vs Y) — addressed?
-□ Every clinical consequence, complication, and lesion effect — included?
-□ Every exception, contraindication, or exam trap — captured?
-□ Is the first 25% of the source equally covered as the rest? (Models tend to skip the beginning)
-□ Is the last 25% of the source equally covered? (Models tend to truncate at the end)
-If ANY gap is found, you MUST add cards for it. Do NOT finalize with missing topics.
+STEP 5 — COVERAGE AUDIT (ZERO TOLERANCE FOR GAPS):
+Go back through the source PARAGRAPH BY PARAGRAPH from first to last and verify:
+□ Does every paragraph have at least one card? If not — ADD cards NOW.
+□ Every named structure, area, gyrus, sulcus, nucleus, tract — has a card?
+□ Every named Brodmann area — covered?
+□ Every named condition, syndrome, or clinical sign — covered?
+□ Every named pathway or circuit — covered?
+□ Every numeric value, percentage, or threshold — covered?
+□ Every comparison or differential pair — has a card AND a trap card?
+□ Every clinical example and analogy from the source — preserved verbatim?
+□ The FIRST THIRD of the source — equally covered as the middle? (Models under-generate at the start)
+□ The LAST THIRD of the source — equally covered as the middle? (Models truncate at the end)
+If ANY gap is found, you MUST generate additional cards before finalizing.
 
 OUTPUT: JSON array only. No markdown fences, no preamble, no commentary.`;
 }
