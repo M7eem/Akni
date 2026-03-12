@@ -130,7 +130,7 @@ Cloze: hide the key clinical finding or mechanism.`
 
 // ── Chunking constants ────────────────────────────────────────────
 const CHUNK_CHAR_LIMIT = 100_000;  // ~25,000 tokens per chunk (flash handles up to 1M context)
-const CHUNK_OVERLAP    = 3_000;    // overlap between chunks
+const CHUNK_OVERLAP = 3_000;    // overlap between chunks
 const SINGLE_CALL_LIMIT = 200_000; // below this, no chunking needed
 const CHUNK_BATCH_SIZE = 3;        // concurrent API calls per batch
 
@@ -140,9 +140,9 @@ const cardSchema = {
   items: {
     type: Type.OBJECT,
     properties: {
-      type:  { type: Type.STRING },
+      type: { type: Type.STRING },
       front: { type: Type.STRING },
-      back:  { type: Type.STRING }
+      back: { type: Type.STRING }
     },
     required: ['type', 'front', 'back'] as const
   }
@@ -223,7 +223,12 @@ STEP 3 — GENERATE CARDS:
 ${cardTypeRestriction}
 ${chunkNote}
 
-CARD DENSITY: Scale to content density. ~3–5 cards per page of dense material. Never pad with trivial cards, never skip high-yield concepts.
+CARD DENSITY: Scale to content density. Target ~3–5 cards per page of dense material (e.g., a 20-page lecture = 60–100 cards). For lighter material, ~2–3 per page. UNDER-GENERATING IS THE WORST POSSIBLE OUTCOME. It is better to produce 20 extra cards than to miss 1 important topic.
+
+STEP 3a — TOPIC EXTRACTION (DO THIS FIRST):
+Before generating any cards, scan the ENTIRE source from beginning to end and list every distinct topic, concept, structure, pathway, condition, drug, organism, and clinical point mentioned. Then generate cards for ALL of them. Do NOT skip any section of the source — the beginning, middle, and end must all have equal coverage.
+
+STEP 3b — GENERATE CARDS:
 
 BASIC CARDS (type: "basic"):
 - Front MUST force reasoning, application, or comparison. NEVER "What is X?" or "Define X".
@@ -251,16 +256,20 @@ FORBIDDEN:
 - Definition-only or single-sentence backs.
 - "What is X?" / "Define X" fronts.
 - Padding or splitting one concept across multiple cards.
+- SKIPPING ANY SECTION OR TOPIC FROM THE SOURCE. Every paragraph must have at least one card.
 
-STEP 4 — SELF-AUDIT (CRITICAL):
-Before finalizing output, re-read the entire source and verify:
-□ Every named structure, drug, organism, enzyme, pathway, receptor is covered
-□ Every numeric value, threshold, or dosage has a card
-□ Every comparison or differential is addressed
-□ Every clinical consequence and complication is included
-□ Every exception, contraindication, or exam trap is captured
-□ The first 25% of the source has equal coverage as the rest
-If any gap is found, add cards for it.
+STEP 4 — SELF-AUDIT (CRITICAL — ZERO TOLERANCE FOR GAPS):
+Before finalizing output, go back through the source PARAGRAPH BY PARAGRAPH and check:
+□ Does every paragraph/section have at least one card? If not, ADD cards now.
+□ Every named structure, area, gyrus, sulcus, nucleus, tract — does it have a card?
+□ Every named drug, organism, enzyme, pathway, receptor — covered?
+□ Every numeric value (percentages, thresholds, dosages, statistics) — covered?
+□ Every comparison or differential (X vs Y) — addressed?
+□ Every clinical consequence, complication, and lesion effect — included?
+□ Every exception, contraindication, or exam trap — captured?
+□ Is the first 25% of the source equally covered as the rest? (Models tend to skip the beginning)
+□ Is the last 25% of the source equally covered? (Models tend to truncate at the end)
+If ANY gap is found, you MUST add cards for it. Do NOT finalize with missing topics.
 
 OUTPUT: JSON array only. No markdown fences, no preamble, no commentary.`;
 }
