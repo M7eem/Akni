@@ -1,10 +1,4 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { detectTOC, detectChapterHeadings, extractFromTOC, extractFromHeadings, extractFromSemanticBreaks } from './pipeline/stage0_structure';
-import { analyzeSection } from './pipeline/stage1_analysis';
-import { splitDisciplineBreaks } from './pipeline/stage2_split';
-import { enumerationGeneratorPrompt, pathwayGeneratorPrompt, narrativeGeneratorPrompt, comparisonGeneratorPrompt } from './pipeline/stage3_prompts';
-import { tier2DensityAudit, tier3ExamSimulation, numberExtractionPrompt, numberExtractionSchema } from './pipeline/stage5_audits';
-import { findSimilarAcrossSections, deduplicateCardCluster, buildCrossDisciplineInput, Card } from './pipeline/stage89_dedup';
 
 export async function generateFlashcards(
   text: string,
@@ -17,7 +11,7 @@ export async function generateFlashcards(
   console.log("GeminiService API Key length:", apiKey?.length, "starts with:", apiKey?.substring(0, 4));
   if (!apiKey) throw new Error("API key not set in environment variables");
   const ai = new GoogleGenAI({ apiKey });
-  return generateWith11StagePipeline(ai, text, images, deckName, cardTypes);
+  return generateWithClient(ai, text, images, deckName, cardTypes);
 }
 
 // ── Models ────────────────────────────────────────────────────────
@@ -28,8 +22,7 @@ const MODEL_LITE   = 'gemini-3.1-flash-lite-preview';
 const CHUNK_CHAR_LIMIT = 100_000;
 const CHUNK_OVERLAP = 3_000;
 const SINGLE_CALL_LIMIT = 200_000;
-const PARALLEL_BATCH_SIZE = 5;
-const SECTION_CONCURRENCY = 3;  // Max sections processed at once
+const CHUNK_BATCH_SIZE = 3;
 
 // ── Card JSON schema (reused everywhere) ──────────────────────────
 const cardSchema = {
@@ -44,6 +37,62 @@ const cardSchema = {
     required: ['type', 'front', 'back'] as const
   }
 };
+
+// ── Pre-detect schema ────────────────────────────────────────────
+const preDetectSchema = {
+  type: Type.OBJECT,
+  properties: {
+    audienceLevel: { type: Type.STRING },
+    segments: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          topic:      { type: Type.STRING },
+          discipline: { type: Type.STRING },
+          startCue:   { type: Type.STRING },
+          strategies: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ['topic', 'discipline', 'startCue', 'strategies'] as const
+      }
+    }
+  },
+  required: ['audienceLevel', 'segments'] as const
+};
+
+// ── Pre-detect prompt ─────────────────────────────────────────────
+const preDetectPrompt = `You are analyzing source material to plan Anki flashcard generation.
+
+TASK 1 — AUDIENCE:
+Identify the target audience level. Return exactly one of:
+"Medical student (Year 1-2)", "Medical student (Year 3-4)", "Resident", "Fellow", "General", "Undergraduate", "Graduate", "Professional"
+
+TASK 2 — SEGMENT THE MATERIAL:
+Divide the source into segments. A segment = a distinct conceptual shift (new organ system, new drug class, new process, new topic area).
+Do NOT create a segment for every heading or subsection.
+A typical lecture has 2–5 segments. Never more than 8 per document.
+
+For each segment return:
+- topic: one sentence describing what this segment covers
+- discipline: the discipline (Anatomy, Physiology, Pharmacology, Biochemistry, Pathology, Microbiology, Immunology, Clinical Medicine, Radiology, Surgery, Epidemiology, or the best-fit discipline)
+- startCue: the first distinctive phrase or sentence where this segment begins in the source
+- strategies: a list of question templates specific to THIS segment's content
+
+TASK 3 — STRATEGIES:
+For each segment, generate one strategy per DISTINCT TESTABLE ANGLE.
+A testable angle is: a mechanism, a clinical consequence, a comparison between two things,
+a pathway with steps, a number with clinical context, or an exam trap / common confusion.
+
+RULES FOR STRATEGIES:
+- Write strategies as question templates, not topics.
+  BAD:  "Broca's area"
+  GOOD: "A patient speaks in broken fragments and is frustrated — where is the lesion and why does this specific area produce non-fluent speech?"
+- Each strategy must be specific to THIS segment's content — not generic.
+- Do NOT pad with extra strategies if the material doesn't warrant them.
+- Do NOT truncate — if the segment has 8 distinct testable angles, write 8 strategies.
+- The number of strategies is determined entirely by the material.
+
+Return JSON matching the schema. No preamble.`;
 
 // ── Compress source for audit pass ────────────────────────────────
 function compressSource(text: string): string {
@@ -115,265 +164,389 @@ function splitTextIntoChunks(text: string): string[] {
   return chunks;
 }
 
+// ── Build the system prompt ───────────────────────────────────────
+function buildSystemPrompt(
+  cardTypes: string[],
+  segments: Segment[],
+  chunkContext?: { chunkIndex: number; totalChunks: number; coveredTopics: string[] }
+): string {
+  const allowedTypesText = cardTypes.join(', ');
+  const noBasicRule = !cardTypes.includes('basic') ? '- Do NOT generate any "basic" type cards. Zero. None.\n' : '';
+  const noClozeRule = !cardTypes.includes('cloze') ? '- Do NOT generate any "cloze" type cards. Zero. None.\n' : '';
+  const cardTypeRestriction = `ALLOWED CARD TYPES: ${allowedTypesText}. STRICTLY FORBIDDEN to generate any other type.\n${noBasicRule}${noClozeRule}`;
 
-// ── Concurrency limiter ──────────────────────────────────────────
-async function withConcurrencyLimit<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
-  const results: T[] = [];
-  const executing: Promise<void>[] = [];
-  
-  for (const task of tasks) {
-    const p = task().then(result => { results.push(result); });
-    executing.push(p);
-    
-    if (executing.length >= limit) {
-      await Promise.race(executing);
-      // Remove settled promises
-      for (let i = executing.length - 1; i >= 0; i--) {
-        const settled = await Promise.race([executing[i].then(() => true), Promise.resolve(false)]);
-        if (settled) executing.splice(i, 1);
-      }
-    }
-  }
-  
-  await Promise.all(executing);
-  return results;
+  const chunkNote = chunkContext
+    ? `\nYou are processing chunk ${chunkContext.chunkIndex + 1} of ${chunkContext.totalChunks} of a large document.
+${chunkContext.coveredTopics.length > 0 ? `Topics already covered by previous chunks (DO NOT re-cover these):\n${chunkContext.coveredTopics.map(t => `- ${t}`).join('\n')}\n` : ''}`
+    : '';
+
+  const segmentBlock = buildSegmentStrategiesBlock(segments);
+
+  return `You are an expert educator creating high-yield Anki flashcards. Your #1 priority is COMPLETE COVERAGE — every testable concept in the source must have a card. Target: 38–80 cards for a dense lecture.
+
+STEP 1 — CARD STRATEGIES BY SEGMENT:
+Apply each segment's strategies ONLY to the content belonging to that segment. Use the startCue to locate where each segment begins.
+
+${segmentBlock}
+
+For content not clearly belonging to any segment, use scenario-based framing and mechanism questions.
+
+STEP 2 — TOPIC INVENTORY (DO THIS FIRST):
+Scan the ENTIRE source beginning to end. Mentally list every named concept: structures, terms, processes, syndromes, pathways, comparisons, numbers, examples. Every item MUST get a card.
+
+${cardTypeRestriction}
+${chunkNote}
+
+STEP 3 — GENERATE CARDS:
+
+DENSITY: Every named concept, process, pathway, and comparison in the source gets at least one card. Major concepts get multiple cards from different angles. Aim for 38–80 cards for a dense lecture.
+
+EXAM-RELEVANCE TEST:
+Before including any card, ask: "Could an examiner write a question using this fact?" If not, CUT it. Remove:
+- Pure definitions without mechanism or consequence
+- Labels without clinical/practical significance
+- Trivial facts that would never appear on an exam
+
+═══ BASIC CARDS (type: "basic") ═══
+
+FRONT RULES:
+- Describe a SITUATION the student must explain. Never ask what something is or where it is.
+- BANNED: "What does [X] do?" / "Define [X]" / "Where is [X]?" / "List features of [X]" / "[X] is responsible for ___" / "Trace the [pathway]" / "Which [structure] separates [X] from [Y]?"
+- REQUIRED: Scenario-based questions, mechanism questions, "why" questions, distinguishing questions. Frame as situations a student must reason through.
+- GOOD FRONTS:
+  ✓ "A patient presents with [symptoms]. What is the underlying mechanism and what structure/process is affected?"
+  ✓ "Why does [process/lesion] produce [effect] but spare [other function]?"
+  ✓ "How do you distinguish [concept A] from [concept B] when they present similarly?"
+- BAD FRONTS:
+  × "What does [X] do?" — pure recall
+  × "A patient presents with [list of diagnostic criteria] — what is this?" — answer is in the question
+  × "Which [structure] does [X]?" — too direct
+- The front must NEVER contain or hint at the answer.
+- Under 40 words.
+
+BACK FORMAT (TWO-PART — ALL CARD TYPES):
+- LINE 1: The direct short answer in bold. Just enough to confirm if the student got it right.
+- Then <hr> separator.
+- BELOW: Short prose explanation connecting the concept → mechanism → significance → distinction from similar concepts. Use the source's exact examples and terminology. Only needed if the student got it wrong.
+- Example:
+  "<b>Short answer here</b><hr>Explanation connecting the concept to its mechanism, significance, and how it differs from similar concepts. Uses the source's own terminology and examples."
+
+═══ CLOZE CARDS (type: "cloze") ═══
+
+- Use {{c1::hidden text}} or {{c1::answer::hint}} syntax.
+- ABSOLUTE RULE: ONLY hide mechanisms, consequences, or unique features. NEVER hide a name, location, or label.
+- SELF-TEST: Cover the hidden text. Can someone guess it from the remaining sentence without studying? If yes → rewrite.
+- BAD CLOZE (forbidden — these hide labels or are guessable):
+  × "The [X] is located in the {{c1::Y}}" — hiding a name
+  × "The {{c1::X}} is responsible for Y" — hiding a label
+  × "[X] is characterized as being {{c1::A, B, and C}}" — pattern-matchable
+- GOOD CLOZE (required — these hide mechanisms):
+  ✓ "[Process X] occurs because {{c1::mechanism explanation::hint}}"
+  ✓ "Unlike [similar process], [this process] {{c1::distinguishing mechanism::what makes it unique}}"
+  ✓ "[Quantitative fact]: {{c1::number}} [units] {{c2::consequence of that number}}"
+- CLOZE BACK FORMAT: Also two-layer. Line 1: completed sentence with answer in bold. Then <hr>. Then: prose explanation of WHY the hidden answer is correct.
+
+═══ EXAM TRAP CARDS (MANDATORY) ═══
+
+For every confusable pair in the source, generate one trap card. A trap card presents the exact confusion point — not a side-by-side comparison.
+- Example: "Two situations/conditions both share [feature]. One is [A], one is [B]. What single test/finding distinguishes them?"
+- Generate at least one trap card per confusable pair found in the source.
+
+═══ SOURCE LANGUAGE ═══
+
+Use the source's EXACT examples and terminology. Never rephrase into generic terms. The original examples are the memory anchors students already have.
+
+═══ FORMATTING ═══
+
+- Bold key terms with <b>tags</b>. <br> for line breaks. <hr> to separate short answer from explanation (ALL card types).
+- No emoji, no bullet points — prose only. Mnemonics in <i>tags</i>.
+
+═══ FORBIDDEN ═══
+
+- Inventing content beyond the source.
+- "What is X?" / "Define X" / "List" / "Trace" / "Which [X]" fronts.
+- Fronts that contain or hint at the answer.
+- Cloze that hides ANY name, location, or label.
+- Pure definition cards without mechanism or consequence.
+- Cards that fail the exam-relevance test.
+- Skipping ANY concept from the source.
+
+STEP 4 — COVERAGE CHECK:
+Go through the source paragraph by paragraph. "Does this paragraph have at least one card?" If not, ADD cards. Check first third and last third have equal coverage to the middle.
+
+OUTPUT: JSON array only. No markdown, no preamble.`;
+}
+
+// ── Pass 2 Audit prompt builder ───────────────────────────────────
+function buildAuditPrompt(compressedSource: string, cardFronts: string, segmentContext: string): string {
+  return `You are auditing an Anki deck for coverage gaps.
+
+Below is a compressed version of the source material (headings and key terms only),
+followed by a list of card fronts already generated.
+
+The source covers these segments:
+${segmentContext}
+
+Your job:
+1. Identify every named concept, structure, process, term, pathway, syndrome, statistic,
+   comparison, and key point present in the source.
+2. Check each one against the existing card fronts.
+3. Return ONLY a JSON array of missing topic strings — concepts that have no corresponding card.
+   Be specific: not "visual pathway" but "nasal vs temporal fiber crossing at optic chiasm."
+
+If nothing is missing, return [].
+Return JSON array of strings only. No preamble.
+
+COMPRESSED SOURCE:
+${compressedSource}
+
+EXISTING CARD FRONTS:
+${cardFronts}`;
+}
+
+// ── Pass 2 Generate prompt builder ────────────────────────────────
+function buildGapGeneratePrompt(sourceText: string, missingTopics: string[]): string {
+  return `You are generating Anki flashcards for specific missing topics only.
+
+SOURCE MATERIAL:
+${sourceText}
+
+MISSING TOPICS — generate exactly one card per topic,
+more if the topic has multiple distinct testable angles:
+${missingTopics.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+Apply these rules:
+- Scenario-based fronts, never "What is X?" or "Define X"
+- Back: short bold answer + <hr> + prose explanation
+- Use source's own examples and terminology
+- Bold key terms with <b>tags</b>
+- Cloze cards: only hide mechanisms/consequences, never names or labels
+- CLOZE BACK FORMAT: Line 1 completed sentence in bold, then <hr>, then explanation
+
+OUTPUT: JSON array only.`;
 }
 
 // ── Main generation logic ─────────────────────────────────────────
-async function generateWith11StagePipeline(
+async function generateWithClient(
   ai: GoogleGenAI,
   text: string,
   images: Record<string, Buffer>,
   deckName: string,
   cardTypes: string[]
 ) {
-  console.log('--- STARTING 11-STAGE PIPELINE ---');
-  const pipelineStart = Date.now();
+  const sourceText = `Deck name: ${deckName}\n\nSource material:\n\n${text}`;
 
-  // ─── Stage 0: Structure detection ───
-  console.log('Stage 0: Detecting document structure...');
-  let structure;
-  if (detectTOC(text)) {
-      console.log('  -> Using TOC extraction');
-      structure = extractFromTOC(text);
-  } else if (detectChapterHeadings(text)) {
-      console.log('  -> Using Chapter Headings extraction');
-      structure = extractFromHeadings(text);
+  // ─── Step 1: Pre-detect segments ───
+  console.log('Pre-detect: analyzing source structure...');
+  let segments: Segment[] = [];
+  try {
+    const third = Math.floor(text.length / 3);
+    const preDetectInput = [
+      text.substring(0, 5000),
+      text.substring(third, third + 5000),
+      text.substring(text.length - 5000)
+    ].join('\n...[excerpt]...\n').substring(0, 15000);
+
+    const preDetectResponse = await ai.models.generateContent({
+      model: MODEL_LITE,
+      contents: { role: 'user', parts: [{ text: preDetectInput }] },
+      config: {
+        systemInstruction: preDetectPrompt,
+        responseMimeType: 'application/json',
+        responseSchema: preDetectSchema
+      }
+    });
+
+    const preDetectText = preDetectResponse.text;
+    if (preDetectText) {
+      const clean = preDetectText.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      segments = parsed.segments || [];
+      console.log(`Pre-detect: ${segments.length} segments found, audience: ${parsed.audienceLevel}`);
+      for (const seg of segments) {
+        console.log(`  - ${seg.topic} [${seg.discipline}] (${seg.strategies.length} strategies)`);
+      }
+    }
+  } catch (err) {
+    console.warn('Pre-detect failed (non-fatal), using generic strategies:', err);
+  }
+
+  // Fallback: if pre-detect failed or returned no segments
+  if (segments.length === 0) {
+    segments = [{
+      topic: 'General content',
+      discipline: 'General',
+      startCue: '',
+      strategies: [
+        'Why does [process/concept] work this way?',
+        'How does [concept A] differ from [concept B]?',
+        'What is the practical significance of [concept]?'
+      ]
+    }];
+  }
+
+  // ─── Step 2: Pass 1 — Generate main deck ───
+  const chunks = splitTextIntoChunks(sourceText);
+  const isChunked = chunks.length > 1;
+
+  console.log(`Pass 1 mode: ${isChunked ? `chunked (${chunks.length} chunks)` : 'single-call'}`);
+
+  let allCards: any[] = [];
+  const coveredTopics: string[] = [];
+
+  if (!isChunked) {
+    console.log('Pass 1: Generating cards (single call)...');
+    const systemPrompt = buildSystemPrompt(cardTypes, segments);
+
+    const response = await ai.models.generateContent({
+      model: MODEL_MAIN,
+      contents: { role: 'user', parts: [{ text: chunks[0] }] },
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: 'application/json',
+        responseSchema: cardSchema
+      }
+    });
+
+    const responseText = response.text;
+    if (!responseText) throw new Error("Empty response from Gemini");
+    const clean = responseText.replace(/```json|```/g, '').trim();
+    allCards = JSON.parse(clean);
+    console.log(`Pass 1 complete: ${allCards.length} cards generated`);
+
   } else {
-      console.log('  -> Using Semantic Breaks (fallback)');
-      structure = extractFromSemanticBreaks(text);
-  }
-  console.log(`  -> Found ${structure.sections.length} structural sections.`);
+    for (let batchStart = 0; batchStart < chunks.length; batchStart += CHUNK_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + CHUNK_BATCH_SIZE, chunks.length);
+      const batch = chunks.slice(batchStart, batchEnd);
 
-  const allCards: Card[] = [];
-  const cardsByDiscipline: Record<string, Card[]> = {};
-  const cardsMutex = { lock: false }; // Simple guard for shared state
+      console.log(`Pass 1 batch ${Math.floor(batchStart / CHUNK_BATCH_SIZE) + 1}/${Math.ceil(chunks.length / CHUNK_BATCH_SIZE)} (chunks ${batchStart + 1}–${batchEnd})...`);
 
-  // ─── Process sections concurrently (up to SECTION_CONCURRENCY at once) ───
-  const sectionTasks = structure.sections.map((section, i) => async () => {
-      const sectionStart = Date.now();
-      console.log(`\nProcessing Section ${i+1}: "${section.title}" (${section.text.length} chars)`);
-      
-      // ─── Stage 1: Section analysis ───
-      const analysis = await analyzeSection(ai, MODEL_LITE, section.title, section.text);
-      console.log(`  -> Stage 1: Disciplines: ${analysis.disciplines.join(', ')}`);
-      console.log(`  -> Stage 1: Content types: ${analysis.contentTypes.join(', ')}`);
-      
-      let subsections = [{ discipline: analysis.disciplines[0] || 'Mixed', contentType: analysis.contentTypes[0] || 'narrative', text: section.text }];
-      
-      // ─── Stage 2: Discipline splitting ───
-      if (analysis.requiresSplit) {
-          console.log(`  -> Stage 2: Splitting mixed narrative across disciplines...`);
-          subsections = await splitDisciplineBreaks(ai, MODEL_LITE, section.text);
-          console.log(`  -> Stage 2: Split into ${subsections.length} coherent subsections.`);
-      }
+      const batchPromises = batch.map((chunk, i) => {
+        const chunkIndex = batchStart + i;
+        const systemPrompt = buildSystemPrompt(cardTypes, segments, {
+          chunkIndex,
+          totalChunks: chunks.length,
+          coveredTopics: [...coveredTopics]
+        });
 
-      const sectionCards: Card[] = [];
-
-      // Process subsections in batches (Stage 4 parallel generation)
-      for (let batchStart = 0; batchStart < subsections.length; batchStart += PARALLEL_BATCH_SIZE) {
-          const batchEnd = Math.min(batchStart + PARALLEL_BATCH_SIZE, subsections.length);
-          const batch = subsections.slice(batchStart, batchEnd);
-          
-          console.log(`  -> Stage 4: Parallel generating batch ${Math.floor(batchStart/PARALLEL_BATCH_SIZE)+1} of ${Math.ceil(subsections.length/PARALLEL_BATCH_SIZE)}`);
-          
-          const batchPromises = batch.map(async (subsec, idx) => {
-              // ─── Stage 3: Content routing ───
-              let promptToUse = narrativeGeneratorPrompt;
-              if (subsec.contentType === 'enumeration') promptToUse = enumerationGeneratorPrompt;
-              else if (subsec.contentType === 'pathway') promptToUse = pathwayGeneratorPrompt;
-              else if (subsec.contentType === 'comparison') promptToUse = comparisonGeneratorPrompt;
-              else if (subsec.contentType === 'numbers-heavy') promptToUse = numberExtractionPrompt;
-              
-              const systemPrompt = `You are an Anki expert. Your allowed card types: ${cardTypes.join(', ')}.
-Discipline context: ${subsec.discipline}.
-${promptToUse}
-
-Rules:
-- Back format: Line 1 short bold answer, then <hr>, then prose explanation.
-- Cloze max 2 per card, only hide mechanisms/consequences, never hide labels or structure names.
-- Never write "What is X?", "Define X", or "List the Y".
-- Prerequisite rule: Cards must be completely self-contained with necessary context. Do not assume the student remembers the previous card.
-- Connection sentence rule: The explanation must contain a clear sentence connecting the 'why' (mechanism) to the 'what' (fact/symptom).
-- Synthesis card rule: Generate exactly one synthesis card per segment that ties the most important concepts together.
-- Bidirectional rule: Ensure cards test relationships in both directions (e.g., Symptom -> Mechanism, and Mechanism -> Symptom).`;
-
-              try {
-                  const schemaToUse = subsec.contentType === 'numbers-heavy' ? numberExtractionSchema : cardSchema;
-                  const response = await ai.models.generateContent({
-                      model: MODEL_MAIN,
-                      contents: { role: 'user', parts: [{ text: subsec.text.substring(0, 100000) }] },
-                      config: {
-                          systemInstruction: systemPrompt,
-                          responseMimeType: 'application/json',
-                          responseSchema: schemaToUse
-                      }
-                  });
-                  
-                  const text = response.text;
-                  if (!text) return { discipline: subsec.discipline, cards: [] as Card[] };
-                  const clean = text.replace(/```json|```/g, '').trim();
-                  const generated = JSON.parse(clean);
-                  
-                  if (subsec.contentType === 'numbers-heavy') {
-                      const numberCards = generated.map((n: any) => ({
-                          type: 'basic',
-                          discipline: subsec.discipline,
-                          front: `A patient has a ${n.context} of ${n.value}. What is the clinical significance of crossing this threshold?`,
-                          back: `<b>${n.significance}</b><hr><b>Exam Trap:</b> Do not confuse with ${n.examTrap}.`
-                      }));
-                      return { discipline: subsec.discipline, cards: numberCards as Card[] };
-                  }
-                  
-                  const typedCards = generated.map((c: any) => ({ ...c, discipline: subsec.discipline }));
-                  return { discipline: subsec.discipline, cards: typedCards as Card[] };
-
-              } catch (err) {
-                  console.warn(`Parallel generation failed for subsection:`, err);
-                  return { discipline: subsec.discipline, cards: [] as Card[] };
-              }
-          });
-          
-          const results = await Promise.all(batchPromises);
-          
-          for (const res of results) {
-              sectionCards.push(...res.cards);
+        return ai.models.generateContent({
+          model: MODEL_MAIN,
+          contents: { role: 'user', parts: [{ text: chunk }] },
+          config: {
+            systemInstruction: systemPrompt,
+            responseMimeType: 'application/json',
+            responseSchema: cardSchema
           }
-      }
+        }).then(response => {
+          const responseText = response.text;
+          if (!responseText) return [];
+          const clean = responseText.replace(/```json|```/g, '').trim();
+          const cards = JSON.parse(clean);
+          console.log(`  Chunk ${chunkIndex + 1}: ${cards.length} cards`);
+          return cards;
+        }).catch(err => {
+          console.error(`  Chunk ${chunkIndex + 1} failed:`, err);
+          return [];
+        });
+      });
 
-      // ─── Stage 5 Tier 2 & 3: Audits — RUN IN PARALLEL ───
-      console.log(`  -> Stage 5: Running Density and Exam Simulation Audits IN PARALLEL...`);
-      const [densityGaps, examGaps] = await Promise.all([
-          tier2DensityAudit(ai, MODEL_LITE, section.text, sectionCards),
-          tier3ExamSimulation(ai, MODEL_MAIN, section.text, sectionCards)
-      ]);
-      const combinedGaps = [...new Set([...densityGaps, ...examGaps])];
-      
-      if (combinedGaps.length > 0) {
-          console.log(`  -> Stage 6: Gap filler generating cards for ${combinedGaps.length} missed concepts...`);
-          const gapPrompt = `You are generating Anki flashcards for specific missing topics only.
-Apply ALL the same rules from your system instructions.
+      const batchResults = await Promise.all(batchPromises);
 
-SOURCE MATERIAL:
-${section.text.substring(0, 8000)}
-
-MISSING TOPICS:
-${combinedGaps.map((t, i) => `${i + 1}. ${t}`).join('\n')}
-
-OUTPUT: JSON array only.`;
-
-          const gapSystemPrompt = `You are an Anki expert. Your allowed card types: ${cardTypes.join(', ')}.
-${narrativeGeneratorPrompt}
-
-Rules:
-- Back format: Line 1 short bold answer, then <hr>, then prose explanation.
-- Cloze max 2 per card, only hide mechanisms/consequences, never hide labels or structure names.
-- Never write "What is X?", "Define X", or "List the Y".
-- Prerequisite rule: Cards must be completely self-contained with necessary context. Do not assume the student remembers the previous card.
-- Connection sentence rule: The explanation must contain a clear sentence connecting the 'why' (mechanism) to the 'what' (fact/symptom).
-- Bidirectional rule: Ensure cards test relationships in both directions (e.g., Symptom -> Mechanism, and Mechanism -> Symptom).`;
-
-          try {
-              const gapResponse = await ai.models.generateContent({
-                  model: MODEL_MAIN,
-                  contents: { role: 'user', parts: [{ text: gapPrompt }] },
-                  config: { 
-                      systemInstruction: gapSystemPrompt,
-                      responseMimeType: 'application/json', 
-                      responseSchema: cardSchema 
-                  }
-              });
-              
-              if (gapResponse.text) {
-                  const clean = gapResponse.text.replace(/```json|```/g, '').trim();
-                  const gapCards = JSON.parse(clean).map((c: any) => ({ ...c, discipline: 'GapFiller' }));
-                  sectionCards.push(...gapCards);
-              }
-          } catch(e) {
-              console.warn('Gap filler failed:', e);
+      for (const cards of batchResults) {
+        allCards.push(...cards);
+        for (const card of cards) {
+          if (card.front) {
+            coveredTopics.push(card.front.substring(0, 80).replace(/<[^>]+>/g, ''));
           }
+        }
       }
+    }
 
-      // Merge section results into shared state
-      allCards.push(...sectionCards);
-      for (const card of sectionCards) {
-          const disc = (card as any).discipline || 'Mixed';
-          if (!cardsByDiscipline[disc]) cardsByDiscipline[disc] = [];
-          cardsByDiscipline[disc].push(card);
-      }
-
-      console.log(`  -> Section ${i+1} complete in ${((Date.now() - sectionStart) / 1000).toFixed(1)}s (${sectionCards.length} cards)`);
-  });
-
-  // Run all sections with concurrency limit
-  await withConcurrencyLimit(sectionTasks, SECTION_CONCURRENCY);
-
-  // ─── Stage 8: Cross-Discipline pass ───
-  console.log('\nStage 8: Synthesizing cross-discipline connections...');
-  const crossInput = buildCrossDisciplineInput(cardsByDiscipline);
-  if (crossInput.length > 50) {
-      try {
-          const crossPrompt = `These are flashcard topics covering multiple disciplines for the same system.
-Generate Synthesis cards linking them together. E.g., combining the Anatomy of a structure with its Pharmacology (drugs acting on it), and its Pathology.
-Generate max 5 extremely high-yield integration cards.
-Rules: Front must be scenario/mechanism. Back must be bold answer + <hr> + explanation.
-
-DISCIPLINES:
-${crossInput}`;
-
-          const crossResponse = await ai.models.generateContent({
-              model: MODEL_MAIN,
-              contents: { role: 'user', parts: [{ text: crossPrompt }] },
-              config: { responseMimeType: 'application/json', responseSchema: cardSchema }
-          });
-          if (crossResponse.text) {
-              const clean = crossResponse.text.replace(/```json|```/g, '').trim();
-              const synthesisCards = JSON.parse(clean).map((c: any) => ({ ...c, discipline: 'Synthesis' }));
-              allCards.push(...synthesisCards);
-              console.log(`  -> Generated ${synthesisCards.length} integration cards.`);
-          }
-      } catch(e) { console.warn('Cross-discipline step failed', e); }
+    console.log(`Pass 1 complete: ${allCards.length} total cards`);
   }
 
-  // ─── Stage 9: Deduplication ───
-  console.log('Stage 9: Deduplicating (O(n^2) safely)...');
-  const suspicousClusters = findSimilarAcrossSections(cardsByDiscipline, 0.65);
-  console.log(`  -> Found ${suspicousClusters.length} suspicious card clusters.`);
-  
-  const finalDeck = await deduplicateCardsGlobal(ai, allCards);
+  // ─── Step 3: Pass 2 Audit — find coverage gaps ───
+  console.log('Pass 2 Audit: checking for coverage gaps...');
+  let missingTopics: string[] = [];
 
-  const totalTime = ((Date.now() - pipelineStart) / 1000).toFixed(1);
-  console.log(`\n--- PIPELINE COMPLETE: ${finalDeck.length} cards in ${totalTime}s ---`);
+  try {
+    const compressed = compressSource(text);
+    const cardFronts = allCards
+      .map((c, i) => `[${i}] ${(c.front || '').replace(/<[^>]+>/g, '').substring(0, 100)}`)
+      .join('\n');
+    const segmentContext = segments
+      .map(s => `- ${s.topic} (${s.discipline})`)
+      .join('\n');
 
-  return filterByCardType(finalDeck, cardTypes);
+    const auditPrompt = buildAuditPrompt(compressed, cardFronts, segmentContext);
+
+    const auditResponse = await ai.models.generateContent({
+      model: MODEL_LITE,
+      contents: { role: 'user', parts: [{ text: auditPrompt }] },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: { type: Type.ARRAY, items: { type: Type.STRING } }
+      }
+    });
+
+    const auditText = auditResponse.text;
+    if (auditText) {
+      const clean = auditText.replace(/```json|```/g, '').trim();
+      missingTopics = JSON.parse(clean);
+      console.log(`Pass 2 Audit: found ${missingTopics.length} missing topics`);
+      for (const topic of missingTopics) {
+        console.log(`  - ${topic}`);
+      }
+    }
+  } catch (err) {
+    console.warn('Pass 2 Audit failed (non-fatal):', err);
+  }
+
+  // ─── Step 4: Pass 2 Generate — fill gaps ───
+  if (missingTopics.length > 0) {
+    console.log(`Pass 2 Generate: creating cards for ${missingTopics.length} missing topics...`);
+
+    try {
+      // Send source text (capped to avoid token overflow) + missing topics
+      const cappedSource = text.substring(0, 100000);
+      const gapPrompt = buildGapGeneratePrompt(cappedSource, missingTopics);
+
+      const gapResponse = await ai.models.generateContent({
+        model: MODEL_MAIN,
+        contents: { role: 'user', parts: [{ text: gapPrompt }] },
+        config: {
+          systemInstruction: buildSystemPrompt(cardTypes, segments),
+          responseMimeType: 'application/json',
+          responseSchema: cardSchema
+        }
+      });
+
+      const gapText = gapResponse.text;
+      if (gapText) {
+        const clean = gapText.replace(/```json|```/g, '').trim();
+        const gapCards = JSON.parse(clean);
+        console.log(`Pass 2 Generate: ${gapCards.length} gap cards created`);
+        allCards.push(...gapCards);
+      }
+    } catch (err) {
+      console.warn('Pass 2 Generate failed (non-fatal):', err);
+    }
+  } else {
+    console.log('Pass 2: no gaps found, skipping generation');
+  }
+
+  // ─── Step 5: Deduplication ───
+  if (allCards.length > 5) {
+    allCards = await deduplicateCards(ai, allCards);
+  }
+
+  return filterByCardType(allCards, cardTypes);
 }
 
-// ── Fallback global lightweight deduplication ────────────────────────
-async function deduplicateCardsGlobal(ai: GoogleGenAI, cards: any[]): Promise<any[]> {
-  if (cards.length <= 5) return cards;
-  console.log('Running final global lightweight deduplication pass...');
+// ── Lightweight deduplication ─────────────────────────────────────
+async function deduplicateCards(ai: GoogleGenAI, cards: any[]): Promise<any[]> {
+  console.log('Running deduplication pass...');
 
-  // Build a compact list of fronts for the model to judge
   const frontList = cards.map((c, i) => `[${i}] ${c.front?.replace(/<[^>]+>/g, '').substring(0, 100)}`).join('\n');
 
   const dedupPrompt = `You are deduplicating Anki flashcards. Below is a numbered list of card fronts.
@@ -404,7 +577,10 @@ ${frontList}`;
     const clean = responseText.replace(/```json|```/g, '').trim();
     const indicesToRemove = new Set<number>(JSON.parse(clean));
 
-    if (indicesToRemove.size === 0) return cards;
+    if (indicesToRemove.size === 0) {
+      console.log('Dedup: no duplicates found');
+      return cards;
+    }
 
     const deduped = cards.filter((_, i) => !indicesToRemove.has(i));
     console.log(`Dedup: removed ${indicesToRemove.size} duplicates (${cards.length} → ${deduped.length})`);
@@ -417,35 +593,11 @@ ${frontList}`;
 }
 
 // ── Post-processing filter ────────────────────────────────────────
-export interface ClozeValidation {
-  valid: boolean;
-  reason?: string;
-}
-
-export function validateClozeCard(front: string): ClozeValidation {
-  const hiddenTexts = [...front.matchAll(/\{\{c\d+::([^:}]+)/g)].map(m => m[1]);
-  for (const hidden of hiddenTexts) {
-    const wordCount = hidden.trim().split(/\s+/).length;
-    if (wordCount > 5) return { valid: false, reason: 'hides full sentence not mechanism keyword' };
-    if (/^[A-Z]/.test(hidden.trim()) && wordCount === 1) return { valid: false, reason: 'hides a name or label' };
-  }
-  return { valid: true };
-}
-
 function filterByCardType(cards: any[], cardTypes: string[]): any[] {
   const allowed = new Set(cardTypes.map(t => t.toLowerCase()));
   const filtered = cards.filter(card => {
     const t = (card.type || 'basic').toLowerCase();
-    
-    if (t === 'cloze') {
-      if (!allowed.has('cloze')) return false;
-      const validation = validateClozeCard(card.front);
-      if (!validation.valid) {
-        console.warn(`[Cloze Violation] Removed card: "${card.front.substring(0, 50)}..." Reason: ${validation.reason}`);
-        return false;
-      }
-    }
-    
+    if (t === 'cloze' && !allowed.has('cloze')) return false;
     if (t === 'basic' && !allowed.has('basic') && !allowed.has('image_occlusion')) return false;
     return true;
   });
