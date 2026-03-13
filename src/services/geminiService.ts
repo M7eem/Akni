@@ -28,7 +28,8 @@ const MODEL_LITE   = 'gemini-3.1-flash-lite-preview';
 const CHUNK_CHAR_LIMIT = 100_000;
 const CHUNK_OVERLAP = 3_000;
 const SINGLE_CALL_LIMIT = 200_000;
-const PARALLEL_BATCH_SIZE = 3;
+const PARALLEL_BATCH_SIZE = 5;
+const SECTION_CONCURRENCY = 3;  // Max sections processed at once
 
 // ── Card JSON schema (reused everywhere) ──────────────────────────
 const cardSchema = {
@@ -115,6 +116,29 @@ function splitTextIntoChunks(text: string): string[] {
 }
 
 
+// ── Concurrency limiter ──────────────────────────────────────────
+async function withConcurrencyLimit<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
+  const results: T[] = [];
+  const executing: Promise<void>[] = [];
+  
+  for (const task of tasks) {
+    const p = task().then(result => { results.push(result); });
+    executing.push(p);
+    
+    if (executing.length >= limit) {
+      await Promise.race(executing);
+      // Remove settled promises
+      for (let i = executing.length - 1; i >= 0; i--) {
+        const settled = await Promise.race([executing[i].then(() => true), Promise.resolve(false)]);
+        if (settled) executing.splice(i, 1);
+      }
+    }
+  }
+  
+  await Promise.all(executing);
+  return results;
+}
+
 // ── Main generation logic ─────────────────────────────────────────
 async function generateWith11StagePipeline(
   ai: GoogleGenAI,
@@ -124,6 +148,7 @@ async function generateWith11StagePipeline(
   cardTypes: string[]
 ) {
   console.log('--- STARTING 11-STAGE PIPELINE ---');
+  const pipelineStart = Date.now();
 
   // ─── Stage 0: Structure detection ───
   console.log('Stage 0: Detecting document structure...');
@@ -142,10 +167,11 @@ async function generateWith11StagePipeline(
 
   const allCards: Card[] = [];
   const cardsByDiscipline: Record<string, Card[]> = {};
+  const cardsMutex = { lock: false }; // Simple guard for shared state
 
-  // For each section, run analysis and splitting
-  for (let i = 0; i < structure.sections.length; i++) {
-      const section = structure.sections[i];
+  // ─── Process sections concurrently (up to SECTION_CONCURRENCY at once) ───
+  const sectionTasks = structure.sections.map((section, i) => async () => {
+      const sectionStart = Date.now();
       console.log(`\nProcessing Section ${i+1}: "${section.title}" (${section.text.length} chars)`);
       
       // ─── Stage 1: Section analysis ───
@@ -162,6 +188,8 @@ async function generateWith11StagePipeline(
           console.log(`  -> Stage 2: Split into ${subsections.length} coherent subsections.`);
       }
 
+      const sectionCards: Card[] = [];
+
       // Process subsections in batches (Stage 4 parallel generation)
       for (let batchStart = 0; batchStart < subsections.length; batchStart += PARALLEL_BATCH_SIZE) {
           const batchEnd = Math.min(batchStart + PARALLEL_BATCH_SIZE, subsections.length);
@@ -175,7 +203,7 @@ async function generateWith11StagePipeline(
               if (subsec.contentType === 'enumeration') promptToUse = enumerationGeneratorPrompt;
               else if (subsec.contentType === 'pathway') promptToUse = pathwayGeneratorPrompt;
               else if (subsec.contentType === 'comparison') promptToUse = comparisonGeneratorPrompt;
-              else if (subsec.contentType === 'numbers-heavy') promptToUse = numberExtractionPrompt; // Stage 7
+              else if (subsec.contentType === 'numbers-heavy') promptToUse = numberExtractionPrompt;
               
               const systemPrompt = `You are an Anki expert. Your allowed card types: ${cardTypes.join(', ')}.
 Discipline context: ${subsec.discipline}.
@@ -203,11 +231,10 @@ Rules:
                   });
                   
                   const text = response.text;
-                  if (!text) return { discipline: subsec.discipline, cards: [] };
+                  if (!text) return { discipline: subsec.discipline, cards: [] as Card[] };
                   const clean = text.replace(/```json|```/g, '').trim();
                   const generated = JSON.parse(clean);
                   
-                  // Wrap Stage 7 numbers into cards
                   if (subsec.contentType === 'numbers-heavy') {
                       const numberCards = generated.map((n: any) => ({
                           type: 'basic',
@@ -215,31 +242,31 @@ Rules:
                           front: `A patient has a ${n.context} of ${n.value}. What is the clinical significance of crossing this threshold?`,
                           back: `<b>${n.significance}</b><hr><b>Exam Trap:</b> Do not confuse with ${n.examTrap}.`
                       }));
-                      return { discipline: subsec.discipline, cards: numberCards };
+                      return { discipline: subsec.discipline, cards: numberCards as Card[] };
                   }
                   
                   const typedCards = generated.map((c: any) => ({ ...c, discipline: subsec.discipline }));
-                  return { discipline: subsec.discipline, cards: typedCards };
+                  return { discipline: subsec.discipline, cards: typedCards as Card[] };
 
               } catch (err) {
                   console.warn(`Parallel generation failed for subsection:`, err);
-                  return { discipline: subsec.discipline, cards: [] };
+                  return { discipline: subsec.discipline, cards: [] as Card[] };
               }
           });
           
           const results = await Promise.all(batchPromises);
           
           for (const res of results) {
-              allCards.push(...res.cards);
-              if (!cardsByDiscipline[res.discipline]) cardsByDiscipline[res.discipline] = [];
-              cardsByDiscipline[res.discipline].push(...res.cards);
+              sectionCards.push(...res.cards);
           }
       }
 
-      // ─── Stage 5 Tier 2 & 3: Audits for gaps ───
-      console.log(`  -> Stage 5: Running Density and Exam Simulation Audits...`);
-      const densityGaps = await tier2DensityAudit(ai, MODEL_LITE, section.text, allCards);
-      const examGaps = await tier3ExamSimulation(ai, MODEL_MAIN, section.text, allCards);
+      // ─── Stage 5 Tier 2 & 3: Audits — RUN IN PARALLEL ───
+      console.log(`  -> Stage 5: Running Density and Exam Simulation Audits IN PARALLEL...`);
+      const [densityGaps, examGaps] = await Promise.all([
+          tier2DensityAudit(ai, MODEL_LITE, section.text, sectionCards),
+          tier3ExamSimulation(ai, MODEL_MAIN, section.text, sectionCards)
+      ]);
       const combinedGaps = [...new Set([...densityGaps, ...examGaps])];
       
       if (combinedGaps.length > 0) {
@@ -280,13 +307,26 @@ Rules:
               if (gapResponse.text) {
                   const clean = gapResponse.text.replace(/```json|```/g, '').trim();
                   const gapCards = JSON.parse(clean).map((c: any) => ({ ...c, discipline: 'GapFiller' }));
-                  allCards.push(...gapCards);
+                  sectionCards.push(...gapCards);
               }
           } catch(e) {
               console.warn('Gap filler failed:', e);
           }
       }
-  }
+
+      // Merge section results into shared state
+      allCards.push(...sectionCards);
+      for (const card of sectionCards) {
+          const disc = (card as any).discipline || 'Mixed';
+          if (!cardsByDiscipline[disc]) cardsByDiscipline[disc] = [];
+          cardsByDiscipline[disc].push(card);
+      }
+
+      console.log(`  -> Section ${i+1} complete in ${((Date.now() - sectionStart) / 1000).toFixed(1)}s (${sectionCards.length} cards)`);
+  });
+
+  // Run all sections with concurrency limit
+  await withConcurrencyLimit(sectionTasks, SECTION_CONCURRENCY);
 
   // ─── Stage 8: Cross-Discipline pass ───
   console.log('\nStage 8: Synthesizing cross-discipline connections...');
@@ -320,9 +360,10 @@ ${crossInput}`;
   const suspicousClusters = findSimilarAcrossSections(cardsByDiscipline, 0.65);
   console.log(`  -> Found ${suspicousClusters.length} suspicious card clusters.`);
   
-  // Here we would run the ML dedup on each cluster (omitted/simplified for brevity to avoid thousands of small calls)
-  // We'll run one final global lightweight dedup pass for the final deck just to be safe.
   const finalDeck = await deduplicateCardsGlobal(ai, allCards);
+
+  const totalTime = ((Date.now() - pipelineStart) / 1000).toFixed(1);
+  console.log(`\n--- PIPELINE COMPLETE: ${finalDeck.length} cards in ${totalTime}s ---`);
 
   return filterByCardType(finalDeck, cardTypes);
 }
