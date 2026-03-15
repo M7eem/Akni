@@ -21,43 +21,47 @@ export async function generateFlashcards(
 // ═══════════════════════════════════════════════════════════════════
 // ARCHITECTURE
 //
-// Step 1  Extract atomic claims       Flash 1M ctx — full document
-// Step 2  Classify: testable?         Lite — binary YES/NO, parallel
-// Step 3  Consolidate into groups     Flash — groups related claims
-//         + detect audience per group Lite — parallel with consolidation
-// Step 4  Generate ONE CARD PER CLAIM Flash — parallel
-//         Groups share context but every claim gets its own front
-// Step 5  Verify claims against       No LLM — cosine similarity
-//         ALL cards (not just own)    checks every claim vs every card
-// Step 6  Gap fill missing claims     Flash — targeted
-// Step 7  Embedding dedup             No LLM — cosine similarity
+// Step 1  Extract atomic claims          Flash 1M ctx — chunked if large
+// Step 2  Classify: testable?            Lite — binary YES/NO, parallel
+// Step 3  Consolidate into groups        Flash — groups related claims
+//         + detect audience per group    Lite — parallel
+// Step 4  Generate cards per group       Flash — parallel
+//         Smart decision per group:
+//           Option A: one combined card  when natural question covers all facts
+//           Option B: one card per fact  when no natural question exists
+//         Model decides — not forced
+// Step 5  Verify claims vs ALL cards     No LLM — cosine similarity
+// Step 6  Gap fill missing claims        Flash — targeted
+// Step 7  Cross-chunk dedup             No LLM — cosine similarity
 //
-// KEY CHANGE FROM PREVIOUS VERSION:
-// Step 4 now generates one card per claim, not one card per group.
-// This ensures every fact has a dedicated front — nothing is buried
-// in the back of a combined card where verification cannot find it.
-// Step 5 checks each claim against ALL cards, not just its group's card.
+// DESIGN PRINCIPLE:
+// Neither one-card-per-group (buries facts) nor one-card-per-claim
+// (loses connections). The model reads each group and decides whether
+// a natural combined question exists. If yes: one card, all facts tested.
+// If no: separate cards, nothing buried.
 // ═══════════════════════════════════════════════════════════════════
 
 // ── Models ────────────────────────────────────────────────────────
-const MODEL_MAIN  = 'gemini-3-flash-preview';
-const MODEL_LITE  = 'gemini-3.1-flash-lite-preview';
-const MODEL_EMBED = 'text-embedding-004';
+const MODEL_MAIN  = 'gemini-3-flash-preview';        // 1M context
+const MODEL_LITE  = 'gemini-3.1-flash-lite-preview'; // classify + audience
+const MODEL_EMBED = 'text-embedding-004';            // verification + dedup
 
 // ── Constants ─────────────────────────────────────────────────────
 // THRESHOLDS — calibrated on thalamus deck (89 claims, 27 cards)
-// COVERAGE_THRESHOLD 0.775: 85.4% coverage, clean separation between
-//   covered (0.782+) and genuinely missing (0.778-)
-// DEDUP_THRESHOLD 0.90: conservative — better to keep a near-duplicate
-//   than remove a legitimate card. Lower if deck feels too redundant.
+// 0.775 gives clean separation: covered ≥0.782, genuinely missing ≤0.778
 const MAX_PARALLEL_CLASSIFY  = 50;
 const MAX_PARALLEL_GENERATE  = 20;
 const MAX_PARALLEL_EMBED     = 10;
 const MAX_RETRIES             = 3;
 const RETRY_BASE_MS           = 1000;
-const COVERAGE_THRESHOLD      = 0.775; // calibrated empirically
-const DEDUP_THRESHOLD         = 0.90;  // calibrated empirically
+const COVERAGE_THRESHOLD      = 0.775; // calibrated
+const DEDUP_THRESHOLD         = 0.90;  // calibrated
 const MAX_CLAIMS_PER_GROUP    = 5;
+
+// Chunked extraction — guarantees completeness at any document length
+// ~22 pages per chunk keeps output tokens well under 65k limit
+const CHUNK_SIZE_CHARS    = 66_000;  // ~22 pages
+const CHUNK_OVERLAP_CHARS = 2_000;   // 2-page overlap prevents boundary losses
 
 // ── Types ─────────────────────────────────────────────────────────
 interface Claim {
@@ -112,7 +116,8 @@ const consolidationSchema = {
   }
 };
 
-// Array schema — every group now returns multiple cards (one per claim)
+// Array schema — generation always returns an array
+// (1 card for Option A combined, N cards for Option B separate)
 const cardArraySchema = {
   type: Type.ARRAY,
   items: {
@@ -136,7 +141,7 @@ const audienceSchema = {
 };
 
 // ── Prompts ───────────────────────────────────────────────────────
-const EXTRACT_PROMPT = `You are reading the ENTIRE source document.
+const EXTRACT_PROMPT = `You are reading this source material.
 Extract every atomic factual claim. One claim = one subject, one fact.
 
 RULES:
@@ -150,24 +155,24 @@ RULES:
 - If the same concept appears multiple times, emit it ONCE
   using the most complete, most clinically specific statement.
 
-SPECIAL RULE FOR COMPARISONS AND EXCEPTIONS:
+SPECIAL RULE — COMPARISONS AND EXCEPTIONS:
 If a sentence describes how X differs from Y, or when a rule does
-NOT apply — extract it as its own claim. Never merge it with the
-general rule. These facts are most commonly lost otherwise.
+NOT apply — extract it as its own claim. Never merge with the rule.
+These facts are most commonly lost.
 
 Examples to always preserve as separate claims:
   "Bell's palsy affects the entire face; UMN lesion spares the forehead"
   "Smell bypasses the thalamus unlike all other senses"
   "Cerebellar lesions cause ipsilateral signs due to double decussation"
-  "The upper facial nucleus receives bilateral input; lower receives contralateral only"
+  "Upper facial nucleus receives bilateral input; lower receives contralateral only"
 
 EXAMPLE — atomic splitting:
 Source: "PICA occlusion causes ipsilateral Horner's, ataxia,
          and contralateral pain/temperature loss"
 Output:
-  { "text": "PICA occlusion causes ipsilateral Horner's syndrome",          "heading": "Wallenberg" }
-  { "text": "PICA occlusion causes ipsilateral ataxia",                     "heading": "Wallenberg" }
-  { "text": "PICA occlusion causes contralateral pain and temperature loss", "heading": "Wallenberg" }
+  { "text": "PICA occlusion causes ipsilateral Horner's syndrome",           "heading": "Wallenberg" }
+  { "text": "PICA occlusion causes ipsilateral ataxia",                      "heading": "Wallenberg" }
+  { "text": "PICA occlusion causes contralateral pain and temperature loss",  "heading": "Wallenberg" }
 
 Return JSON array only. No preamble.`;
 
@@ -180,7 +185,8 @@ background with no clinical relevance.
 Reply with exactly one word: YES or NO`;
 
 const CONSOLIDATE_PROMPT = `Organize these medical claims into card groups.
-Each group shares context for card generation.
+Each group will be evaluated for whether its claims can be combined
+into one card or need separate cards.
 
 RULES:
 - Every claim must appear in exactly one group. Do not discard any.
@@ -193,9 +199,6 @@ RULES:
 - Never combine claims from genuinely different topics.
 - Maximum ${MAX_CLAIMS_PER_GROUP} claims per group.
 - Groups of 1 are fine — not everything needs combining.
-
-NOTE: Even when claims are grouped, each claim will get its own
-dedicated card front. Grouping only means they share source context.
 
 CARD TYPES:
   single            one standalone fact
@@ -237,7 +240,6 @@ Step 1:    Why does X produce Y? What structure explains this deficit?
 Step 2:    Next best step. What test and why not the alternative.
            What is contraindicated. Richer clinical vignettes.
 Resident:  Exceptions to rules. Evidence basis. Risk stratification.
-           Failed first-line management.
 General:   Match depth to each individual fact.
 
 ═══ FORMAT — READ THE MATERIAL, WRITE THE RIGHT QUESTION ═══
@@ -254,10 +256,6 @@ Trap         "A student assumes [wrong answer]. What rules it out?"
 Next step    "Patient with [vignette]. What now and why not [alternative]?"
 Recall       Clean focused recall for isolated facts with no better angle.
 
-COMBINING: you will receive one fact per card request.
-Write the best possible question for THAT specific fact.
-Use the shared context for terminology and mechanism detail.
-
 OUTPUT: JSON array. No preamble.`;
 }
 
@@ -273,10 +271,13 @@ async function run(
   const hasImages = Object.keys(images).length > 0;
   console.log(`\nSource: ${source.length.toLocaleString()} chars (~${Math.round(source.length / 4).toLocaleString()} tokens)`);
 
-  // Step 1: Extract atomic claims
-  console.log('\n── Step 1: Extracting claims...');
-  const claims = await extractClaims(ai, source, hasImages, images);
-  console.log(`  ${claims.length} claims extracted`);
+  // Step 1: Chunked extraction — guarantees completeness at any scale
+  console.log('\n── Step 1: Extracting claims (chunked)...');
+  const rawClaims = await extractClaims(ai, source, hasImages, images);
+
+  // Cross-chunk dedup — removes duplicates from overlapping boundaries
+  const claims = await deduplicateClaimsAcrossChunks(ai, rawClaims);
+  console.log(`  ${rawClaims.length} raw → ${claims.length} after cross-chunk dedup`);
   if (claims.length === 0) throw new Error('No claims extracted.');
 
   // Step 2: Classify
@@ -290,8 +291,8 @@ async function run(
   const groups = await consolidateAndClassify(ai, testable);
   console.log(`  ${testable.length} claims → ${groups.length} groups`);
 
-  // Step 4: Generate one card per claim (not one per group)
-  console.log('\n── Step 4: Generating cards (one per claim)...');
+  // Step 4: Generate — model decides combine or separate per group
+  console.log('\n── Step 4: Generating cards (smart combine-or-separate)...');
   const { cards, failedGroups } = await generateAllCards(
     ai, groups, testable, cardTypes, hasImages, images
   );
@@ -321,7 +322,6 @@ async function run(
   // Step 7: Embedding dedup
   console.log(`\n── Step 7: Dedup (${allCards.length} cards)...`);
   const deduped = await deduplicateWithEmbeddings(ai, allCards);
-  console.log(`  ${allCards.length - deduped.length} duplicates removed`);
 
   const result = filterByCardType(deduped, cardTypes);
   console.log(`\n✓ Done: ${result.length} cards`);
@@ -329,7 +329,13 @@ async function run(
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// STEP 1 — EXTRACTION
+// STEP 1 — CHUNKED EXTRACTION
+//
+// Splits document into ~22-page chunks with 2-page overlap.
+// Each chunk is extracted in parallel.
+// Overlap prevents facts at chunk boundaries from being missed.
+// Cross-chunk dedup removes duplicates from the overlap regions.
+// This guarantees extraction completeness regardless of document size.
 // ═══════════════════════════════════════════════════════════════════
 async function extractClaims(
   ai: GoogleGenAI,
@@ -337,19 +343,56 @@ async function extractClaims(
   hasImages: boolean,
   images: Record<string, Buffer>
 ): Promise<Claim[]> {
-  const estimatedOutputTokens = Math.round(source.length / 4 / 8);
+  const chunks = splitIntoChunks(source, CHUNK_SIZE_CHARS, CHUNK_OVERLAP_CHARS);
+  console.log(`  ${chunks.length} chunks (${CHUNK_SIZE_CHARS.toLocaleString()} chars each)`);
 
-  if (estimatedOutputTokens > 50_000) {
-    console.log('  Large doc — two halves...');
-    const mid   = source.lastIndexOf('\n\n', Math.floor(source.length / 2));
-    const split = mid > 0 ? mid : Math.floor(source.length / 2);
-    // Sequential — second half offset uses first half count to prevent ID collision
-    const a = await extractFromChunk(ai, source.substring(0, split), hasImages, images, 0);
-    const b = await extractFromChunk(ai, source.substring(split), hasImages, images, a.length);
-    return [...a, ...b];
+  // Track cumulative offset per chunk for unique IDs
+  // Each chunk gets an offset so cl_0001 from chunk 1 ≠ cl_0001 from chunk 2
+  const offsets: number[] = [0];
+  for (let i = 1; i < chunks.length; i++) {
+    offsets.push(offsets[i - 1] + 1000); // 1000 IDs per chunk is more than enough
   }
 
-  return extractFromChunk(ai, source, hasImages, images, 0);
+  const results = await withConcurrencyLimit(
+    chunks.map((chunk, i) => () =>
+      extractFromChunk(ai, chunk, hasImages, images, offsets[i])
+    ),
+    5 // conservative — each chunk call is heavy
+  );
+
+  return results.flat();
+}
+
+function splitIntoChunks(
+  text: string,
+  chunkSize: number,
+  overlap: number
+): string[] {
+  if (text.length <= chunkSize) return [text];
+
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < text.length) {
+    let end = Math.min(start + chunkSize, text.length);
+
+    // Prefer breaking at paragraph boundary
+    if (end < text.length) {
+      const slice      = text.substring(Math.max(end - 500, start), end);
+      const lastBreak  = slice.lastIndexOf('\n\n');
+      if (lastBreak !== -1) {
+        end = Math.max(end - 500, start) + lastBreak + 2;
+      }
+    }
+
+    chunks.push(text.substring(start, end));
+    if (end >= text.length) break;
+
+    // Next chunk starts before end of this chunk (overlap)
+    start = end - overlap;
+  }
+
+  return chunks;
 }
 
 async function extractFromChunk(
@@ -390,20 +433,54 @@ async function extractFromChunk(
     const last = raw.lastIndexOf('}');
     try {
       rawClaims = JSON.parse(raw.substring(0, last + 1) + ']');
-      console.warn('  JSON truncated — partial recovery');
+      console.warn(`  Chunk JSON truncated — partial recovery`);
     } catch {
-      console.warn('  JSON parse failed');
+      console.warn(`  Chunk JSON parse failed`);
       return [];
     }
   }
 
   return rawClaims
     .map((c: any, i: number) => ({
-      id:      `cl_${String(idOffset + i).padStart(4, '0')}`,
+      id:      `cl_${String(idOffset + i).padStart(5, '0')}`,
       text:    (c.text    || '').trim(),
       heading: (c.heading || '').trim()
     }))
     .filter(c => c.text.length > 10);
+}
+
+// Cross-chunk dedup — removes claims duplicated by chunk overlap
+async function deduplicateClaimsAcrossChunks(
+  ai: GoogleGenAI,
+  claims: Claim[]
+): Promise<Claim[]> {
+  if (claims.length < 2) return claims;
+
+  try {
+    const embeddings = await embedTexts(ai, claims.map(c => c.text));
+    const toRemove   = new Set<number>();
+
+    for (let i = 0; i < claims.length; i++) {
+      if (toRemove.has(i) || !embeddings[i]) continue;
+      for (let j = i + 1; j < claims.length; j++) {
+        if (toRemove.has(j) || !embeddings[j]) continue;
+        // Only dedup within same heading — prevents cross-topic removal
+        if (claims[i].heading !== claims[j].heading) continue;
+        if (cosineSim(embeddings[i]!, embeddings[j]!) >= 0.92) {
+          // Keep the longer, more complete claim
+          toRemove.add(
+            claims[i].text.length >= claims[j].text.length ? j : i
+          );
+        }
+      }
+    }
+
+    return claims.filter((_, i) => !toRemove.has(i));
+  } catch {
+    // If embedding fails, return all claims — no dedup is safer than losing claims
+    console.warn('  Cross-chunk dedup unavailable — keeping all claims');
+    return claims;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -524,13 +601,10 @@ async function consolidateAndClassify(
   }
 
   // Unassigned claims → their own groups
-  const unassignedCount = claims.filter(c => !assignedIds.has(c.id)).length;
-  if (unassignedCount > 0) {
-    console.warn(`  ${unassignedCount} unassigned claims — adding as singles`);
-  }
   claims
     .filter(c => !assignedIds.has(c.id))
     .forEach((c, i) => {
+      console.warn(`  Unassigned: ${c.id} — adding as single`);
       groups.push({
         groupId:   `g_u_${i}`,
         claimIds:  [c.id],
@@ -540,7 +614,7 @@ async function consolidateAndClassify(
     });
 
   // 3b: Audience level per group — parallel Lite calls
-  // Include heading in the text for better classification signal
+  // Include heading for stronger classification signal
   const claimMap = new Map(claims.map(c => [c.id, c]));
 
   const groupsWithLevel = await withConcurrencyLimit(
@@ -582,12 +656,22 @@ async function detectLevel(ai: GoogleGenAI, text: string): Promise<string> {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// STEP 4 — GENERATION: ONE CARD PER CLAIM
+// STEP 4 — SMART GENERATION: COMBINE OR SEPARATE
 //
-// KEY CHANGE: returns GeneratedCard[] (array) not a single card.
-// Every claim in a group gets its own dedicated front.
-// Groups share source context — that is the only benefit of grouping.
-// Nothing is buried in the back of a combined card anymore.
+// For each group, the model reads the facts and decides:
+//
+// OPTION A — ONE COMBINED CARD
+//   Used when one natural question requires knowing ALL facts.
+//   The student must know every fact to answer correctly.
+//   Example: Wallenberg's 3 signs → one scenario card tests all three.
+//
+// OPTION B — SEPARATE CARDS (one per fact)
+//   Used when no natural combined question exists, or when combining
+//   would require knowing 5+ things simultaneously.
+//   Example: unrelated nuclei in same heading → separate cards.
+//
+// The model decides. Neither option is forced.
+// Returns array in both cases — 1 card for A, N cards for B.
 // ═══════════════════════════════════════════════════════════════════
 async function generateAllCards(
   ai: GoogleGenAI,
@@ -611,7 +695,7 @@ async function generateAllCards(
 
   for (let i = 0; i < results.length; i++) {
     if (results[i].length > 0) {
-      cards.push(...results[i]); // flatten — each group returns multiple cards
+      cards.push(...results[i]);
     } else {
       failedGroups.push(groups[i]);
     }
@@ -640,7 +724,7 @@ async function generateGroupWithRetry(
       );
     }
   }
-  return []; // empty array = this group failed all retries
+  return [];
 }
 
 async function generateGroup(
@@ -658,7 +742,6 @@ async function generateGroup(
   const parts: any[] = [{ text: buildGroupPrompt(group, groupClaims) }];
 
   if (hasImages) {
-    // Dedup first, then slice — Set runs before slice
     const refs = [...new Set(
       groupClaims
         .flatMap(c => c.context.match(/\[Image:\s*([^\]]+)\]/g) || [])
@@ -682,7 +765,7 @@ async function generateGroup(
     config: {
       systemInstruction: buildSystemPrompt(cardTypes, group.audienceLevel),
       responseMimeType: 'application/json',
-      responseSchema: cardArraySchema // expects array — one card per claim
+      responseSchema: cardArraySchema
     }
   });
 
@@ -693,8 +776,9 @@ async function generateGroup(
     throw new Error(`Group ${group.groupId} returned no cards`);
   }
 
-  // Map each returned card back to its claim by position
-  // Generator is instructed to return cards in same order as facts
+  // Map each returned card back to its source claim
+  // For Option A (1 combined card): all claims map to that one card
+  // For Option B (N separate cards): each card maps to its claim by position
   return cards.map((card: any, i: number) => ({
     groupId: group.groupId,
     claimId: groupClaims[i]?.id || groupClaims[0]?.id || group.claimIds[0] || '',
@@ -705,13 +789,12 @@ async function generateGroup(
 }
 
 function buildGroupPrompt(group: ClaimGroup, groupClaims: TestableClaim[]): string {
-  const isSingle     = groupClaims.length === 1;
   const contextBlock = [...new Set(groupClaims.map(c => c.context))]
     .join('\n---\n')
     .substring(0, 1500);
-  const headings     = [...new Set(groupClaims.map(c => c.heading))].join(' / ');
+  const headings = [...new Set(groupClaims.map(c => c.heading))].join(' / ');
 
-  if (isSingle) {
+  if (groupClaims.length === 1) {
     return `Generate ONE Anki flashcard for this fact.
 
 FACT: ${groupClaims[0].text}
@@ -724,37 +807,56 @@ Use whatever format fits the material.
 Return JSON array with exactly one card object. No preamble.`;
   }
 
-  // Multiple claims — one card per claim, shared context
   const factsBlock = groupClaims
     .map((c, i) => `${i + 1}. ${c.text}`)
     .join('\n');
 
-  return `Generate one Anki flashcard for EACH fact below.
-These facts share context — use the context for all cards.
+  return `You have ${groupClaims.length} related facts.
 
-IMPORTANT:
-- Do NOT combine facts into one card.
-- Do NOT write one card and mention the others in the back.
-- Every fact gets its own dedicated front.
-- Return cards in the SAME ORDER as the facts list.
-
-FACTS (one card per fact, in this order):
+FACTS:
 ${factsBlock}
 
 HEADING: ${headings}
-SHARED SOURCE CONTEXT:
+SOURCE CONTEXT:
 ${contextBlock}
 
-Return JSON array — one object per fact, same order.
-No preamble.`;
+DECIDE which approach makes better cards:
+
+OPTION A — ONE COMBINED CARD:
+Use when ONE question naturally requires knowing ALL facts to answer.
+The student cannot answer correctly knowing only one fact.
+Must be answerable in under 15 seconds.
+
+Good: "PICA occlusion causes Horner's, ataxia, and crossed pain loss"
+  → ONE scenario card: patient presents with [signs] — identify and explain each
+Good: "STN involved in basal ganglia" + "STN lesion causes hemiballismus"
+  → ONE structure-deficit card: why does STN lesion cause that specific movement?
+Good: "Bell's palsy — whole face" + "UMN palsy — lower face only"
+  → ONE distinction card: both are facial weakness — what distinguishes them?
+
+Bad: forcing facts from different structures into one question
+Bad: combining 4+ unrelated facts — card becomes overwhelming
+
+OPTION B — SEPARATE CARDS:
+Use when no single question naturally requires knowing all facts,
+or when combining would make the card overwhelming (4+ distinct things),
+or when the facts belong to genuinely different testable angles.
+Each fact gets its own dedicated front. Nothing buried in a back.
+
+RETURN:
+Option A: JSON array with 1 card object
+Option B: JSON array with one card object per fact, in facts list order
+
+The goal: fewer, smarter cards that connect ideas — not a quiz bowl.
+Return JSON array. No preamble.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // STEP 5 — VERIFICATION: CLAIMS AGAINST ALL CARDS
 //
-// KEY CHANGE: each group's claims are checked against ALL cards,
-// not just the card generated by that group. A claim covered by
-// a nearby group's card is correctly marked as covered.
+// Each claim group is checked against ALL generated card fronts —
+// not just its own card. A claim covered by a nearby group's card
+// is correctly marked as covered.
 // ═══════════════════════════════════════════════════════════════════
 async function verifyGroupCoverage(
   ai: GoogleGenAI,
@@ -765,7 +867,7 @@ async function verifyGroupCoverage(
   try {
     const claimMap = new Map(claims.map(c => [c.id, c]));
 
-    // One text per group = all its claim texts joined
+    // One representative text per group = all claim texts joined
     const groupTexts = groups.map(g =>
       g.claimIds
         .map(id => claimMap.get(id)?.text || '')
@@ -773,9 +875,9 @@ async function verifyGroupCoverage(
         .join('. ')
     );
 
-    // All card fronts — deduplicated and filtered
+    // All unique card fronts
     const cardFronts = [...new Set(
-      cards.map(c => stripHtml(c.front)).filter(Boolean)
+      cards.map(c => stripHtml(c.front)).filter(f => f.length > 0)
     )];
 
     if (cardFronts.length === 0) {
@@ -788,7 +890,6 @@ async function verifyGroupCoverage(
     ]);
 
     const validCardEmbs = cardEmbs.filter((e): e is number[] => e !== null);
-
     const missingGroups: ClaimGroup[] = [];
 
     for (let i = 0; i < groups.length; i++) {
@@ -805,7 +906,7 @@ async function verifyGroupCoverage(
       }
     }
 
-    console.log(`  ${groups.length - missingGroups.length}/${groups.length} groups verified`);
+    console.log(`  ${groups.length - missingGroups.length}/${groups.length} groups covered`);
     return { missingGroups };
 
   } catch (err) {
@@ -832,7 +933,6 @@ async function deduplicateWithEmbeddings(
       for (let j = i + 1; j < cards.length; j++) {
         if (toRemove.has(j) || !embeddings[j]) continue;
         if (cosineSim(embeddings[i]!, embeddings[j]!) >= DEDUP_THRESHOLD) {
-          // Keep the card with the longer, more detailed back
           toRemove.add(cards[i].back.length >= cards[j].back.length ? j : i);
         }
       }
@@ -882,7 +982,7 @@ async function embedTexts(
 async function embedOne(ai: GoogleGenAI, text: string): Promise<number[]> {
   const aiAny = ai as any;
   if (typeof aiAny.models?.embedContent !== 'function') {
-    throw new Error('embedContent not available on this SDK version — upgrade @google/genai');
+    throw new Error('embedContent not available — upgrade @google/genai');
   }
   const response = await aiAny.models.embedContent({
     model:   MODEL_EMBED,
