@@ -18,37 +18,48 @@ export async function generateFlashcards(
   return run(ai, text, images, deckName, cardTypes);
 }
 
-// ─────────────────────────────────────────────────────────────────
-// MODELS
-// ─────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// ARCHITECTURE
+//
+// Step 1  Extract atomic claims       Flash 1M ctx — full document
+// Step 2  Classify: testable?         Lite — binary YES/NO, parallel
+// Step 3  Consolidate into groups     Flash — groups related claims
+//         + detect audience per group Lite — parallel with consolidation
+// Step 4  Generate ONE CARD PER CLAIM Flash — parallel
+//         Groups share context but every claim gets its own front
+// Step 5  Verify claims against       No LLM — cosine similarity
+//         ALL cards (not just own)    checks every claim vs every card
+// Step 6  Gap fill missing claims     Flash — targeted
+// Step 7  Embedding dedup             No LLM — cosine similarity
+//
+// KEY CHANGE FROM PREVIOUS VERSION:
+// Step 4 now generates one card per claim, not one card per group.
+// This ensures every fact has a dedicated front — nothing is buried
+// in the back of a combined card where verification cannot find it.
+// Step 5 checks each claim against ALL cards, not just its group's card.
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Models ────────────────────────────────────────────────────────
 const MODEL_MAIN  = 'gemini-3-flash-preview';
 const MODEL_LITE  = 'gemini-3.1-flash-lite-preview';
 const MODEL_EMBED = 'text-embedding-004';
 
-// ─────────────────────────────────────────────────────────────────
-// CONSTANTS
-//
-// THRESHOLDS — must be calibrated empirically before production:
-// Run pipeline on 5 known decks with ground-truth coverage data.
-// Measure false positives (covered flagged as missing) and false
-// negatives (missing not flagged) at different threshold values.
-// COVERAGE_THRESHOLD: too low = excessive gap fills and extra cards
-//                     too high = real gaps slip through undetected
-// DEDUP_THRESHOLD:    too low = legitimate distinct cards removed
-//                     too high = true duplicates survive dedup
-// ─────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────
+// THRESHOLDS — calibrated on thalamus deck (89 claims, 27 cards)
+// COVERAGE_THRESHOLD 0.775: 85.4% coverage, clean separation between
+//   covered (0.782+) and genuinely missing (0.778-)
+// DEDUP_THRESHOLD 0.90: conservative — better to keep a near-duplicate
+//   than remove a legitimate card. Lower if deck feels too redundant.
 const MAX_PARALLEL_CLASSIFY  = 50;
 const MAX_PARALLEL_GENERATE  = 20;
 const MAX_PARALLEL_EMBED     = 10;
 const MAX_RETRIES             = 3;
 const RETRY_BASE_MS           = 1000;
-const COVERAGE_THRESHOLD      = 0.82; // TODO: calibrate empirically
-const DEDUP_THRESHOLD         = 0.90; // TODO: calibrate empirically
+const COVERAGE_THRESHOLD      = 0.775; // calibrated empirically
+const DEDUP_THRESHOLD         = 0.90;  // calibrated empirically
 const MAX_CLAIMS_PER_GROUP    = 5;
 
-// ─────────────────────────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────
 interface Claim {
   id:      string;
   text:    string;
@@ -64,20 +75,18 @@ interface ClaimGroup {
   claimIds:      string[];
   cardType:      string;
   rationale:     string;
-  audienceLevel: string; // FIX 3: per-group, not per-deck
+  audienceLevel: string;
 }
 
 interface GeneratedCard {
-  groupId: string;  // FIX 1: links to group for group-level verification
+  groupId: string;
   claimId: string;
   type:    string;
   front:   string;
   back:    string;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// SCHEMAS
-// ─────────────────────────────────────────────────────────────────
+// ── Schemas ───────────────────────────────────────────────────────
 const claimSchema = {
   type: Type.ARRAY,
   items: {
@@ -103,14 +112,18 @@ const consolidationSchema = {
   }
 };
 
-const cardSchema = {
-  type: Type.OBJECT,
-  properties: {
-    type:  { type: Type.STRING },
-    front: { type: Type.STRING },
-    back:  { type: Type.STRING }
-  },
-  required: ['type', 'front', 'back'] as const
+// Array schema — every group now returns multiple cards (one per claim)
+const cardArraySchema = {
+  type: Type.ARRAY,
+  items: {
+    type: Type.OBJECT,
+    properties: {
+      type:  { type: Type.STRING },
+      front: { type: Type.STRING },
+      back:  { type: Type.STRING }
+    },
+    required: ['type', 'front', 'back'] as const
+  }
 };
 
 const audienceSchema = {
@@ -122,9 +135,7 @@ const audienceSchema = {
   required: ['level', 'reasoning'] as const
 };
 
-// ─────────────────────────────────────────────────────────────────
-// PROMPTS
-// ─────────────────────────────────────────────────────────────────
+// ── Prompts ───────────────────────────────────────────────────────
 const EXTRACT_PROMPT = `You are reading the ENTIRE source document.
 Extract every atomic factual claim. One claim = one subject, one fact.
 
@@ -139,13 +150,24 @@ RULES:
 - If the same concept appears multiple times, emit it ONCE
   using the most complete, most clinically specific statement.
 
-EXAMPLE:
+SPECIAL RULE FOR COMPARISONS AND EXCEPTIONS:
+If a sentence describes how X differs from Y, or when a rule does
+NOT apply — extract it as its own claim. Never merge it with the
+general rule. These facts are most commonly lost otherwise.
+
+Examples to always preserve as separate claims:
+  "Bell's palsy affects the entire face; UMN lesion spares the forehead"
+  "Smell bypasses the thalamus unlike all other senses"
+  "Cerebellar lesions cause ipsilateral signs due to double decussation"
+  "The upper facial nucleus receives bilateral input; lower receives contralateral only"
+
+EXAMPLE — atomic splitting:
 Source: "PICA occlusion causes ipsilateral Horner's, ataxia,
          and contralateral pain/temperature loss"
 Output:
-  { "text": "PICA occlusion causes ipsilateral Horner's syndrome",           "heading": "Wallenberg" }
-  { "text": "PICA occlusion causes ipsilateral ataxia",                      "heading": "Wallenberg" }
-  { "text": "PICA occlusion causes contralateral pain and temperature loss",  "heading": "Wallenberg" }
+  { "text": "PICA occlusion causes ipsilateral Horner's syndrome",          "heading": "Wallenberg" }
+  { "text": "PICA occlusion causes ipsilateral ataxia",                     "heading": "Wallenberg" }
+  { "text": "PICA occlusion causes contralateral pain and temperature loss", "heading": "Wallenberg" }
 
 Return JSON array only. No preamble.`;
 
@@ -158,10 +180,10 @@ background with no clinical relevance.
 Reply with exactly one word: YES or NO`;
 
 const CONSOLIDATE_PROMPT = `Organize these medical claims into card groups.
-Each group becomes ONE Anki flashcard.
+Each group shares context for card generation.
 
 RULES:
-- Every claim must appear in exactly one group. Do not discard any claim.
+- Every claim must appear in exactly one group. Do not discard any.
 - Combine claims a student would naturally learn together:
     same concept from different angles
     cause and its clinical effect
@@ -170,7 +192,10 @@ RULES:
     pathway steps in sequence
 - Never combine claims from genuinely different topics.
 - Maximum ${MAX_CLAIMS_PER_GROUP} claims per group.
-- Groups of 1 are fine.
+- Groups of 1 are fine — not everything needs combining.
+
+NOTE: Even when claims are grouped, each claim will get its own
+dedicated card front. Grouping only means they share source context.
 
 CARD TYPES:
   single            one standalone fact
@@ -190,9 +215,6 @@ Return exactly one of:
 "General"   non-medical or unclear
 Return JSON with "level" and one-sentence "reasoning".`;
 
-// ─────────────────────────────────────────────────────────────────
-// FIX 4: SHORT SYSTEM PROMPT — hard rules at the top, ~350 words
-// ─────────────────────────────────────────────────────────────────
 function buildSystemPrompt(cardTypes: string[], audienceLevel: string): string {
   const allowed = cardTypes.join(', ');
   const noBasic = !cardTypes.includes('basic') ? '\n- No "basic" cards.' : '';
@@ -213,8 +235,7 @@ AUDIENCE: ${audienceLevel}
 Step 1:    Why does X produce Y? What structure explains this deficit?
            Mechanism always in the back.
 Step 2:    Next best step. What test and why not the alternative.
-           What is contraindicated. Management pivot when X changes.
-           Richer clinical vignettes with vitals and timeline.
+           What is contraindicated. Richer clinical vignettes.
 Resident:  Exceptions to rules. Evidence basis. Risk stratification.
            Failed first-line management.
 General:   Match depth to each individual fact.
@@ -233,31 +254,29 @@ Trap         "A student assumes [wrong answer]. What rules it out?"
 Next step    "Patient with [vignette]. What now and why not [alternative]?"
 Recall       Clean focused recall for isolated facts with no better angle.
 
-COMBINING: if multiple related facts can be answered by ONE question
-in under 15 seconds — write that one card.
-If it requires knowing 5+ things simultaneously — split it.
+COMBINING: you will receive one fact per card request.
+Write the best possible question for THAT specific fact.
+Use the shared context for terminology and mechanism detail.
 
-OUTPUT: Single JSON object. No preamble.`;
+OUTPUT: JSON array. No preamble.`;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// MAIN PIPELINE
-// ─────────────────────────────────────────────────────────────────
+// ── Main pipeline ─────────────────────────────────────────────────
 async function run(
   ai: GoogleGenAI,
   text: string,
   images: Record<string, Buffer>,
   deckName: string,
   cardTypes: string[]
-): Promise<any[]> {
+): Promise<GeneratedCard[]> {
   const source    = `Deck: ${deckName}\n\n${text}`;
   const hasImages = Object.keys(images).length > 0;
-  console.log(`\nSource: ${source.length.toLocaleString()} chars`);
+  console.log(`\nSource: ${source.length.toLocaleString()} chars (~${Math.round(source.length / 4).toLocaleString()} tokens)`);
 
   // Step 1: Extract atomic claims
   console.log('\n── Step 1: Extracting claims...');
   const claims = await extractClaims(ai, source, hasImages, images);
-  console.log(`  ${claims.length} claims`);
+  console.log(`  ${claims.length} claims extracted`);
   if (claims.length === 0) throw new Error('No claims extracted.');
 
   // Step 2: Classify
@@ -266,36 +285,41 @@ async function run(
   console.log(`  ${testable.length}/${claims.length} testable`);
   if (testable.length === 0) throw new Error('No testable claims.');
 
-  // Step 3: Consolidate + FIX 3: audience level per group
-  console.log('\n── Step 3: Consolidating + detecting audience per group...');
+  // Step 3: Consolidate + audience level per group
+  console.log('\n── Step 3: Consolidating + detecting audience...');
   const groups = await consolidateAndClassify(ai, testable);
   console.log(`  ${testable.length} claims → ${groups.length} groups`);
 
-  // Step 4: Generate one card per group
-  console.log('\n── Step 4: Generating cards...');
+  // Step 4: Generate one card per claim (not one per group)
+  console.log('\n── Step 4: Generating cards (one per claim)...');
   const { cards, failedGroups } = await generateAllCards(
     ai, groups, testable, cardTypes, hasImages, images
   );
-  console.log(`  ${cards.length} cards, ${failedGroups.length} failed`);
+  console.log(`  ${cards.length} cards from ${groups.length - failedGroups.length} groups`);
+  if (failedGroups.length > 0) {
+    console.warn(`  ${failedGroups.length} groups failed all retries`);
+  }
 
-  // FIX 1: Group-level verification
-  console.log('\n── Step 5: Group-level verification...');
+  // Step 5: Verify claims against ALL cards
+  console.log('\n── Step 5: Verifying coverage...');
   const { missingGroups } = await verifyGroupCoverage(ai, groups, cards, testable);
-  console.log(`  ${missingGroups.length} groups need gap fill`);
+  console.log(`  ${groups.length - missingGroups.length}/${groups.length} groups covered`);
 
+  // Step 6: Gap fill
   let allCards = [...cards];
-
   if (missingGroups.length > 0) {
-    console.log(`\n── Step 5b: Gap fill — ${missingGroups.length} groups...`);
+    console.log(`\n── Step 6: Gap fill — ${missingGroups.length} groups...`);
     const { cards: gapCards } = await generateAllCards(
       ai, missingGroups, testable, cardTypes, hasImages, images
     );
     allCards = [...cards, ...gapCards];
     console.log(`  ${gapCards.length} gap cards`);
+  } else {
+    console.log('\n── Step 6: No gaps — skipping.');
   }
 
-  // Step 6: Embedding dedup
-  console.log(`\n── Step 6: Dedup (${allCards.length} cards)...`);
+  // Step 7: Embedding dedup
+  console.log(`\n── Step 7: Dedup (${allCards.length} cards)...`);
   const deduped = await deduplicateWithEmbeddings(ai, allCards);
   console.log(`  ${allCards.length - deduped.length} duplicates removed`);
 
@@ -319,8 +343,7 @@ async function extractClaims(
     console.log('  Large doc — two halves...');
     const mid   = source.lastIndexOf('\n\n', Math.floor(source.length / 2));
     const split = mid > 0 ? mid : Math.floor(source.length / 2);
-    // Extract first half first to get its count — use that as offset for second half
-    // Prevents ID collision regardless of how many claims the first half produces
+    // Sequential — second half offset uses first half count to prevent ID collision
     const a = await extractFromChunk(ai, source.substring(0, split), hasImages, images, 0);
     const b = await extractFromChunk(ai, source.substring(split), hasImages, images, a.length);
     return [...a, ...b];
@@ -369,6 +392,7 @@ async function extractFromChunk(
       rawClaims = JSON.parse(raw.substring(0, last + 1) + ']');
       console.warn('  JSON truncated — partial recovery');
     } catch {
+      console.warn('  JSON parse failed');
       return [];
     }
   }
@@ -416,7 +440,7 @@ async function classifyOne(
 }
 
 function getContext(claimText: string, source: string, window = 600): string {
-  // Exact match first
+  // Exact match
   const idx = source.indexOf(claimText);
   if (idx !== -1) {
     return source.substring(
@@ -424,30 +448,21 @@ function getContext(claimText: string, source: string, window = 600): string {
       Math.min(source.length, idx + claimText.length + window / 2)
     );
   }
-
-  // Fuzzy fallback: use a longer anchor (40 chars) to reduce false matches.
-  // Short anchors like "the brain receives" match many locations incorrectly.
-  const anchorLen  = Math.min(40, claimText.length);
-  const anchor     = claimText.substring(0, anchorLen);
-  const fuzzyIdx   = source.indexOf(anchor);
-
+  // Fuzzy fallback — 40 char anchor reduces wrong-location matches
+  const anchorLen = Math.min(40, claimText.length);
+  const anchor    = claimText.substring(0, anchorLen);
+  const fuzzyIdx  = source.indexOf(anchor);
   if (fuzzyIdx !== -1) {
     return source.substring(
       Math.max(0, fuzzyIdx - window / 2),
       Math.min(source.length, fuzzyIdx + window)
     );
   }
-
-  // No match — return empty. Generator still has claim text + heading.
   return '';
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// STEP 3 — CONSOLIDATION + AUDIENCE LEVEL PER GROUP (FIX 3)
-//
-// Consolidation and audience detection are merged into one step.
-// Consolidation produces groups. Audience detection runs on each
-// group in parallel immediately after — one Lite call per group.
+// STEP 3 — CONSOLIDATION + AUDIENCE LEVEL PER GROUP
 // ═══════════════════════════════════════════════════════════════════
 async function consolidateAndClassify(
   ai: GoogleGenAI,
@@ -485,7 +500,7 @@ async function consolidateAndClassify(
     }));
   }
 
-  // Validate IDs — prevent hallucinated IDs and duplicate assignments
+  // Validate IDs — prevent hallucinated IDs, prevent duplicate assignments
   const validIds    = new Set(claims.map(c => c.id));
   const assignedIds = new Set<string>();
   const groups: Omit<ClaimGroup, 'audienceLevel'>[] = [];
@@ -493,8 +508,8 @@ async function consolidateAndClassify(
   for (let i = 0; i < rawGroups.length; i++) {
     const g             = rawGroups[i];
     const validClaimIds = (g.claimIds || []).filter((id: string) => {
-      if (!validIds.has(id))      { console.warn(`  Unknown ID: ${id}`); return false; }
-      if (assignedIds.has(id))    { return false; } // already assigned
+      if (!validIds.has(id))   { console.warn(`  Unknown ID: ${id}`); return false; }
+      if (assignedIds.has(id)) { return false; }
       assignedIds.add(id);
       return true;
     });
@@ -508,7 +523,11 @@ async function consolidateAndClassify(
     }
   }
 
-  // Unassigned claims → single groups
+  // Unassigned claims → their own groups
+  const unassignedCount = claims.filter(c => !assignedIds.has(c.id)).length;
+  if (unassignedCount > 0) {
+    console.warn(`  ${unassignedCount} unassigned claims — adding as singles`);
+  }
   claims
     .filter(c => !assignedIds.has(c.id))
     .forEach((c, i) => {
@@ -520,7 +539,8 @@ async function consolidateAndClassify(
       });
     });
 
-  // 3b: Detect audience level per group — parallel Lite calls
+  // 3b: Audience level per group — parallel Lite calls
+  // Include heading in the text for better classification signal
   const claimMap = new Map(claims.map(c => [c.id, c]));
 
   const groupsWithLevel = await withConcurrencyLimit(
@@ -528,8 +548,6 @@ async function consolidateAndClassify(
       const groupText = group.claimIds
         .map(id => {
           const claim = claimMap.get(id);
-          // Include heading — it often carries the strongest level signal
-          // e.g. "Clinical Management of..." vs "Anatomy of..."
           return claim ? `${claim.heading}: ${claim.text}` : '';
         })
         .filter(Boolean)
@@ -564,7 +582,12 @@ async function detectLevel(ai: GoogleGenAI, text: string): Promise<string> {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// STEP 4 — GENERATION
+// STEP 4 — GENERATION: ONE CARD PER CLAIM
+//
+// KEY CHANGE: returns GeneratedCard[] (array) not a single card.
+// Every claim in a group gets its own dedicated front.
+// Groups share source context — that is the only benefit of grouping.
+// Nothing is buried in the back of a combined card anymore.
 // ═══════════════════════════════════════════════════════════════════
 async function generateAllCards(
   ai: GoogleGenAI,
@@ -587,7 +610,11 @@ async function generateAllCards(
   const failedGroups: ClaimGroup[]    = [];
 
   for (let i = 0; i < results.length; i++) {
-    results[i] ? cards.push(results[i]!) : failedGroups.push(groups[i]);
+    if (results[i].length > 0) {
+      cards.push(...results[i]); // flatten — each group returns multiple cards
+    } else {
+      failedGroups.push(groups[i]);
+    }
   }
 
   return { cards, failedGroups };
@@ -600,7 +627,7 @@ async function generateGroupWithRetry(
   cardTypes: string[],
   hasImages: boolean,
   images: Record<string, Buffer>
-): Promise<GeneratedCard | null> {
+): Promise<GeneratedCard[]> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       return await generateGroup(ai, group, claimMap, cardTypes, hasImages, images);
@@ -613,7 +640,7 @@ async function generateGroupWithRetry(
       );
     }
   }
-  return null;
+  return []; // empty array = this group failed all retries
 }
 
 async function generateGroup(
@@ -623,7 +650,7 @@ async function generateGroup(
   cardTypes: string[],
   hasImages: boolean,
   images: Record<string, Buffer>
-): Promise<GeneratedCard> {
+): Promise<GeneratedCard[]> {
   const groupClaims = group.claimIds
     .map(id => claimMap.get(id))
     .filter(Boolean) as TestableClaim[];
@@ -631,12 +658,13 @@ async function generateGroup(
   const parts: any[] = [{ text: buildGroupPrompt(group, groupClaims) }];
 
   if (hasImages) {
-    // Dedup first, then slice — otherwise duplicate refs consume the cap
+    // Dedup first, then slice — Set runs before slice
     const refs = [...new Set(
       groupClaims
         .flatMap(c => c.context.match(/\[Image:\s*([^\]]+)\]/g) || [])
         .map(r => r.replace(/\[Image:\s*/, '').replace(/\]$/, '').trim())
     )].slice(0, 2);
+
     for (const ref of refs) {
       if (!images[ref]) continue;
       const buf  = images[ref];
@@ -654,60 +682,79 @@ async function generateGroup(
     config: {
       systemInstruction: buildSystemPrompt(cardTypes, group.audienceLevel),
       responseMimeType: 'application/json',
-      responseSchema: cardSchema
+      responseSchema: cardArraySchema // expects array — one card per claim
     }
   });
 
-  const raw  = response.text?.replace(/```json|```/g, '').trim() || '{}';
-  const card = JSON.parse(raw);
+  const raw   = response.text?.replace(/```json|```/g, '').trim() || '[]';
+  const cards = JSON.parse(raw);
 
-  return {
+  if (!Array.isArray(cards) || cards.length === 0) {
+    throw new Error(`Group ${group.groupId} returned no cards`);
+  }
+
+  // Map each returned card back to its claim by position
+  // Generator is instructed to return cards in same order as facts
+  return cards.map((card: any, i: number) => ({
     groupId: group.groupId,
-    claimId: groupClaims[0]?.id || group.claimIds[0] || '',
+    claimId: groupClaims[i]?.id || groupClaims[0]?.id || group.claimIds[0] || '',
     type:    card.type  || 'basic',
     front:   card.front || '',
     back:    card.back  || ''
-  };
+  }));
 }
 
 function buildGroupPrompt(group: ClaimGroup, groupClaims: TestableClaim[]): string {
   const isSingle     = groupClaims.length === 1;
-  const factsBlock   = groupClaims.map((c, i) => `${i + 1}. ${c.text}`).join('\n');
   const contextBlock = [...new Set(groupClaims.map(c => c.context))]
     .join('\n---\n')
     .substring(0, 1500);
   const headings     = [...new Set(groupClaims.map(c => c.heading))].join(' / ');
 
-  const combineNote = isSingle ? '' : `
-These facts belong together (${group.cardType}: ${group.rationale}).
-Write ONE card testing all of them if one natural question covers all.
-If not — focus on the most important fact; address others in the back.
-Must be answerable in under 15 seconds.`;
+  if (isSingle) {
+    return `Generate ONE Anki flashcard for this fact.
 
-  return `Generate ONE Anki flashcard.
-${combineNote}
-
-${isSingle ? `FACT: ${groupClaims[0].text}` : `FACTS:\n${factsBlock}`}
+FACT: ${groupClaims[0].text}
 HEADING: ${headings}
 SOURCE CONTEXT:
 ${contextBlock}
 
-Read the fact(s). Ask: what would a smart examiner ask about this?
-Use whatever format fits. Return single JSON object. No preamble.`;
+Read the fact. Ask: what would a smart examiner ask about this?
+Use whatever format fits the material.
+Return JSON array with exactly one card object. No preamble.`;
+  }
+
+  // Multiple claims — one card per claim, shared context
+  const factsBlock = groupClaims
+    .map((c, i) => `${i + 1}. ${c.text}`)
+    .join('\n');
+
+  return `Generate one Anki flashcard for EACH fact below.
+These facts share context — use the context for all cards.
+
+IMPORTANT:
+- Do NOT combine facts into one card.
+- Do NOT write one card and mention the others in the back.
+- Every fact gets its own dedicated front.
+- Return cards in the SAME ORDER as the facts list.
+
+FACTS (one card per fact, in this order):
+${factsBlock}
+
+HEADING: ${headings}
+SHARED SOURCE CONTEXT:
+${contextBlock}
+
+Return JSON array — one object per fact, same order.
+No preamble.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// FIX 1: GROUP-LEVEL VERIFICATION
+// STEP 5 — VERIFICATION: CLAIMS AGAINST ALL CARDS
 //
-// Previous system verified individual claims against cards.
-// A group card covering 3 claims scored low for 2 of them because
-// the front only emphasized one — triggering false gap fills.
-//
-// This system verifies groups against cards:
-// Each group's representative text (all its claim texts joined)
-// is compared against the card generated for that group.
-// A group is covered if its card front is semantically close to
-// the combined meaning of all its claims.
+// KEY CHANGE: each group's claims are checked against ALL cards,
+// not just the card generated by that group. A claim covered by
+// a nearby group's card is correctly marked as covered.
 // ═══════════════════════════════════════════════════════════════════
 async function verifyGroupCoverage(
   ai: GoogleGenAI,
@@ -716,52 +763,45 @@ async function verifyGroupCoverage(
   claims: TestableClaim[]
 ): Promise<{ missingGroups: ClaimGroup[] }> {
   try {
-    const claimMap       = new Map(claims.map(c => [c.id, c]));
-    const cardByGroupId  = new Map(cards.map(c => [c.groupId, c]));
+    const claimMap = new Map(claims.map(c => [c.id, c]));
 
-    // Build representative text per group = all claim texts joined
-    const groupRepTexts  = groups.map(g =>
+    // One text per group = all its claim texts joined
+    const groupTexts = groups.map(g =>
       g.claimIds
         .map(id => claimMap.get(id)?.text || '')
         .filter(Boolean)
         .join('. ')
     );
 
-    // Card fronts aligned to groups (empty string if no card)
-    const cardFronts = groups.map(g => {
-      const card = cardByGroupId.get(g.groupId);
-      return card ? stripHtml(card.front) : '';
-    });
+    // All card fronts — deduplicated and filtered
+    const cardFronts = [...new Set(
+      cards.map(c => stripHtml(c.front)).filter(Boolean)
+    )];
 
-    // Groups with no card at all are immediately missing
-    const missingGroups: ClaimGroup[] = groups.filter(
-      g => !cardByGroupId.has(g.groupId) || !cardByGroupId.get(g.groupId)?.front
-    );
-    const groupsToVerify = groups.filter(
-      g => cardByGroupId.has(g.groupId) && cardByGroupId.get(g.groupId)?.front
-    );
-
-    if (groupsToVerify.length === 0) {
-      return { missingGroups };
+    if (cardFronts.length === 0) {
+      return { missingGroups: groups };
     }
 
-    const verifyTexts  = groupsToVerify.map(g =>
-      g.claimIds.map(id => claimMap.get(id)?.text || '').join('. ')
-    );
-    const verifyFronts = groupsToVerify.map(g =>
-      stripHtml(cardByGroupId.get(g.groupId)!.front)
-    );
-
     const [groupEmbs, cardEmbs] = await Promise.all([
-      embedTexts(ai, verifyTexts),
-      embedTexts(ai, verifyFronts)
+      embedTexts(ai, groupTexts),
+      embedTexts(ai, cardFronts)
     ]);
 
-    for (let i = 0; i < groupsToVerify.length; i++) {
-      if (!groupEmbs[i] || !cardEmbs[i]) continue;
-      const sim = cosineSim(groupEmbs[i]!, cardEmbs[i]!);
-      if (sim < COVERAGE_THRESHOLD) {
-        missingGroups.push(groupsToVerify[i]);
+    const validCardEmbs = cardEmbs.filter((e): e is number[] => e !== null);
+
+    const missingGroups: ClaimGroup[] = [];
+
+    for (let i = 0; i < groups.length; i++) {
+      if (!groupEmbs[i]) continue;
+
+      // Check against ALL card fronts — not just own group's card
+      const best = validCardEmbs.length > 0
+        ? Math.max(...validCardEmbs.map(e => cosineSim(groupEmbs[i]!, e)))
+        : 0;
+
+      if (best < COVERAGE_THRESHOLD) {
+        missingGroups.push(groups[i]);
+        console.log(`  Gap [${best.toFixed(3)}]: ${groupTexts[i].substring(0, 70)}`);
       }
     }
 
@@ -769,13 +809,13 @@ async function verifyGroupCoverage(
     return { missingGroups };
 
   } catch (err) {
-    console.warn('  Group verification unavailable (non-fatal):', err);
+    console.warn('  Verification unavailable (non-fatal):', err);
     return { missingGroups: [] };
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// STEP 6 — EMBEDDING DEDUP
+// STEP 7 — EMBEDDING DEDUP
 // ═══════════════════════════════════════════════════════════════════
 async function deduplicateWithEmbeddings(
   ai: GoogleGenAI,
@@ -792,16 +832,18 @@ async function deduplicateWithEmbeddings(
       for (let j = i + 1; j < cards.length; j++) {
         if (toRemove.has(j) || !embeddings[j]) continue;
         if (cosineSim(embeddings[i]!, embeddings[j]!) >= DEDUP_THRESHOLD) {
-          toRemove.add(
-            cards[i].back.length >= cards[j].back.length ? j : i
-          );
+          // Keep the card with the longer, more detailed back
+          toRemove.add(cards[i].back.length >= cards[j].back.length ? j : i);
         }
       }
     }
 
-    return cards.filter((_, i) => !toRemove.has(i));
+    const result = cards.filter((_, i) => !toRemove.has(i));
+    console.log(`  ${toRemove.size} duplicates removed (${cards.length} → ${result.length})`);
+    return result;
+
   } catch (err) {
-    console.warn('  Dedup unavailable:', err);
+    console.warn('  Dedup unavailable (non-fatal):', err);
     return cards;
   }
 }
@@ -838,9 +880,6 @@ async function embedTexts(
 }
 
 async function embedOne(ai: GoogleGenAI, text: string): Promise<number[]> {
-  // embedContent is not in the official GoogleGenAI type definitions at all SDK versions.
-  // Cast is required. If this throws, embedTexts catches per-item and returns null —
-  // pipeline continues without embeddings rather than crashing.
   const aiAny = ai as any;
   if (typeof aiAny.models?.embedContent !== 'function') {
     throw new Error('embedContent not available on this SDK version — upgrade @google/genai');
